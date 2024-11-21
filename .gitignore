@@ -1,0 +1,9 @@
+agama/
+data/300*
+data/600*
+data/freeze_frames
+*.png
+*.pdf
+plot/figures/
+binev.data
+data/__pycache__
