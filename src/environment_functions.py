@@ -6,7 +6,7 @@ from amuse.units import units, constants
 from amuse.ext.orbital_elements import orbital_elements_from_binary
 
 
-def handle_coll(parti, parti_in_enc, tcoll, dir_path, code):
+def handle_coll(parti, parti_in_enc, tcoll, dir_path, stellar_type):
     """
     Resolve merging event
     
@@ -14,19 +14,12 @@ def handle_coll(parti, parti_in_enc, tcoll, dir_path, code):
       parti (object):  The complete particle set being simulated
       parti_in_enc (object):  The particles in the collision
       tcoll (float):  The time which the particles collide at
-      code (code):  The integrator used
       dir_path (string):  Path to save orbital data
     Returns:
       new_particle (object):  The new particle formed from the collision
     """
     p1 = parti[parti.key == parti_in_enc[0].key]
     p2 = parti[parti.key == parti_in_enc[1].key]
-    if p1.type == "smbh" or p2.type == "smbh":
-       new_type="smbh"
-    elif p1.type == "star" and p2.type == "star":
-       new_type = "star"    
-    else:
-       new_type = "IMBH"
 
     bin_sys = Particles()
     bin_sys.add_particle(p1)
@@ -44,6 +37,7 @@ def handle_coll(parti, parti_in_enc, tcoll, dir_path, code):
              "Key2: {}".format(p2.key),
              "M1: {}".format(p1.mass.in_(units.MSun)),
              "M2: {}".format(p2.mass.in_(units.MSun)),
+             "Stellar Types: {}".format(stellar_type),
              "Semi-major axis: {}".format(abs(sem).in_(units.au)),
              "Eccentricity: {}".format(ecc),
              "Inclination: {} deg".format(inc),
@@ -67,21 +61,11 @@ def handle_coll(parti, parti_in_enc, tcoll, dir_path, code):
     new_particle.position = com_pos
     new_particle.velocity = com_vel
     new_particle.coll_events = (p1.coll_events + p2.coll_events) + 1
-    new_particle.type = new_type
     if max(parti_in_enc.mass) > 125 | units.MSun:
-       new_particle.radius = 10.*(6.*constants.G*new_particle.mass)/(constants.c**2.)  # 10x rISCO
+       new_particle.radius = (6.*constants.G*new_particle.mass)/(constants.c**2.)
     else:
        new_particle.radius = ZAMS_radius(new_particle.mass)
-    new_particle.bound = max(parti_in_enc.bound)
-    
-    if (0):#"Classical" not in dir_path:
-        if new_particle.mass > 1000 | units.MSun:
-            code.particles.remove_particles(parti_in_enc)
-            code.large_particles.add_particles(new_particle)
-        else:
-            code.particles.remove_particles(parti_in_enc)
-            code.small_particles.add_particles(new_particle)
-    
+    new_particle.stellar_type = max(stellar_type)
     parti.add_particles(new_particle)
     parti.remove_particles(parti_in_enc)
     
@@ -125,3 +109,16 @@ def ZAMS_radius(mass):
     r_zams = pow(mass.value_in(units.MSun), 1.25) \
             * (0.1148 + 0.8604*mass_sq) / (0.04651 + mass_sq)
     return r_zams | units.RSun
+  
+def stellar_tidal_radius(stars, SMBH_mass):
+    """
+    Define stellar particle radius
+    
+    Args:
+        stars (object):  Stellar particles
+        SMBH_mass (float):  Mass of the SMBH
+    Returns:
+        radius (float):  Stellar particle radius
+    """
+    r_zams = stars.radius * (0.844**2 * SMBH_mass/stars.mass)**(1./3.)
+    return r_zams

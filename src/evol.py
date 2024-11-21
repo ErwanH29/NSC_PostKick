@@ -1,18 +1,15 @@
 import numpy as np
 import os
-import sys
 import time as cpu_time
 
-
-from amuse.community.hermite_grx.interface import HermiteGRX
 from amuse.community.ph4.interface import Ph4
 from amuse.community.seba.interface import SeBa
 from amuse.datamodel import Particles
 from amuse.lab import write_set_to_file
 from amuse.units import units
-from amuse.lab import constants
 
-from src.evol_func import handle_coll, handle_supernova
+from src.environment_functions import handle_coll, handle_supernova
+from src.environment_functions import stellar_tidal_radius
 
 class EvolveSystem(object):
     def __init__(self, parti, tend, eta, conv, 
@@ -35,7 +32,6 @@ class EvolveSystem(object):
         self.init_pset = parti
         self.tend = tend
         self.siter = 0
-        print(no_files, self.tend, self.siter)
         
         self.time = 0. | units.yr
         self.eta = eta
@@ -61,96 +57,140 @@ class EvolveSystem(object):
         self.rvir_init = self.init_pset.virial_radius()
         
         self.particles = self.init_pset
-        if (1): #"Classical" in self.dpath:
-            print("Classical run")
-            self.grav_code = Ph4(self.conv, number_of_workers=self.no_workers)
-            self.grav_code.particles.add_particles(self.particles)
-            self.grav_code.parameters.timestep_parameter = 0.1
-        else:
-            print("PN run")
-            SMBH = self.particles[self.particles.mass.argmax()]
-            minor = self.particles - SMBH
-            
-            self.grav_code = HermiteGRX(self.conv, number_of_workers=self.no_workers)
-            self.grav_code.parameters.perturbation = "1PN_Pairwise"
-            self.grav_code.parameters.integrator = 'RegularizedHermite'
-            self.grav_code.small_particles.add_particles(minor)
-            self.grav_code.large_particles.add_particle(SMBH)
-            self.grav_code.parameters.light_speed = constants.c
-            self.grav_code.parameters.dt_param = 0.1
+        self.grav_code = Ph4(self.conv, number_of_workers=self.no_workers)
+        self.grav_code.particles.add_particles(self.particles)
+        self.grav_code.parameters.timestep_parameter = 2**-3
 
         self.grav_stopping = self.grav_code.stopping_conditions.collision_detection
         self.grav_stopping.enable()
 
         self.chnl_from_grav = self.grav_code.particles.new_channel_to(self.particles,
-                                attributes=["mass","radius","vx","vy","vz","x","y","z"], 
-                                target_names=["mass","radius","vx","vy","vz","x","y","z"]
-                                )
+                                attributes=["mass","vx","vy","vz","x","y","z"], 
+                                target_names=["mass","vx","vy","vz","x","y","z"])
         self.chnl_from_locl = self.particles.new_channel_to(self.grav_code.particles)
         
-        self.stars = self.particles[self.particles.type == "star"]
+        self.stars = self.particles[self.particles.stellar_type < (13 | units.stellar_type)]
         self.stellar_code = SeBa()
         self.stellar_code.particles.add_particles(self.stars)
         self.stellar_stopping = self.stellar_code.stopping_conditions.supernova_detection
         self.stellar_stopping.enable()
         self.star_channel = self.stellar_code.particles.new_channel_to(
                                 self.grav_code.particles, 
-                                attributes=["mass", "radius"], 
-                                target_names=["mass", "radius"])
+                                attributes=["mass"], 
+                                target_names=["mass"])
+        self.star_local_channel = self.stellar_code.particles.new_channel_to(
+                                    self.particles, 
+                                    attributes=["stellar_type"], 
+                                    target_names=["stellar_type"])
+
+
+    def process_merger(self, enc_particles_set, stellar_type_array):
+        filename = "merger_"+str(np.sum(self.particles.coll_events))+".amuse"
+        merge_file = os.path.join(self.dpath, "merge_snapshots",
+                                  self.fname, filename)
+        write_set_to_file(self.particles, merge_file, 'hdf5',
+                          close_file=True, overwrite_file=True)
+
+        newp = handle_coll(self.particles, 
+                           enc_particles_set, 
+                           self.grav_code.model_time, 
+                           self.coll_path,
+                           stellar_type_array)
+        return newp
 
     def check_merger(self):
         """Check and resolve mergers"""
         for ci in range(len(self.grav_stopping.particles(0))):                
-            filename = "merger_"+str(np.sum(self.particles.coll_events))+".amuse"
             self.chnl_from_grav.copy()
             
-            merge_file = os.path.join(self.dpath, "merge_snapshots", 
-                                      self.fname, filename
-                                      )
-            write_set_to_file(self.particles, merge_file, 'hdf5',
-                              close_file=True, overwrite_file=True
-                              )
             
             colliders = self.grav_code.stopping_conditions.collision_detection.particles
             enc_particles_set = Particles(particles=[colliders(0), colliders(1)])
-            handle_coll(self.particles, 
-                        enc_particles_set, 
-                        self.grav_code.model_time, 
-                        self.coll_path,
-                        self.grav_code
-                        )
-            if (1):#"Classical" in self.dpath:
-                self.particles.synchronize_to(self.grav_code.particles)
+            stellar_type_arr = [ ]
+            for p in enc_particles_set:
+               collider = p.as_particle_in_set(self.particles)
+               stellar_type_arr.append(collider.stellar_type)
+
+            distance = (enc_particles_set[0].position - enc_particles_set[1].position).length()
+            if max(stellar_type_arr) < 14 | units.stellar_type:
+                coll_a_radius = enc_particles_set[0].as_particle_in_set(self.stellar_code.particles).radius
+                coll_b_radius = enc_particles_set[1].as_particle_in_set(self.stellar_code.particles).radius
+
+                if distance <= (coll_a_radius + coll_b_radius):
+                    print("Star-Star collision")
+                    newp = self.process_merger(enc_particles_set, stellar_type_arr)
+                    self.stellar_code.particles.remove_particle(enc_particles_set[0])
+                    self.stellar_code.particles.remove_particle(enc_particles_set[1])
+                    self.stellar_code.particles.add_particle(newp)
+
+                    newp.radius = newp.as_particle_in_set(self.stellar_code.particles).radius
+                    newp.radius = stellar_tidal_radius(newp, self.particles.mass.max())
+                    self.particles.synchronize_to(self.grav_code.particles)
+
+            else:
+                print("Non-star collision")                
+                # If not SMBH and at least one star --> Star - Compact Object collision
+                if max(enc_particles_set.mass) < self.grav_code.particles.mass.max() \
+                    and min(stellar_type_arr) < 14 | units.stellar_type:
+
+                    st_idx = np.asarray(stellar_type_arr).argmin()
+                    co_idx = np.asarray(stellar_type_arr).argmax()
+
+                    star = enc_particles_set[st_idx]
+                    radius = star.as_particle_in_set(self.stellar_code.particles).radius
+                    radius *= (enc_particles_set[co_idx].mass/self.grav_code.particles.mass.max())**(1./3.)
+                    if distance < (radius + enc_particles_set[co_idx].radius):
+                        print("Non-SMBH collision")
+                        newp = self.process_merger(enc_particles_set, stellar_type_arr)
+                        coll_a = enc_particles_set[0].as_particle_in_set(self.stellar_code.particles)
+                        coll_b = enc_particles_set[1].as_particle_in_set(self.stellar_code.particles)
+
+                        if coll_a is not None:
+                            self.stellar_code.particles.remove_particle(coll_a)
+                        if coll_b is not None:
+                            self.stellar_code.particles.remove_particle(coll_b)
+
+                        self.particles.synchronize_to(self.grav_code.particles)
+
+                else:
+                    print("SMBH Collision")
+                    
+                    newp = self.process_merger(enc_particles_set, stellar_type_arr)
+                    coll_a = enc_particles_set[0].as_particle_in_set(self.stellar_code.particles)
+                    coll_b = enc_particles_set[1].as_particle_in_set(self.stellar_code.particles)
+                    if coll_a is not None:
+                        self.stellar_code.particles.remove_particle(coll_a)
+                    if coll_b is not None:
+                        self.stellar_code.particles.remove_particle(coll_b)
+                    
+                    self.particles.synchronize_to(self.grav_code.particles)
 
     def run_code(self):
         filename = f"snapshot_step_{self.siter}.amuse"
         snap_file = os.path.join(self.dpath, "simulation_snapshot", 
-                                 self.fname, filename
-                                 )
+                                 self.fname, filename)
         
         write_set_to_file(self.particles, snap_file, 'hdf5',
-                          close_file=True, overwrite_file=True
-                          )
+                          close_file=True, overwrite_file=True)
         
         while (self.time<self.tend):
             self.siter += 1
             self.time += self.dt
             self.chnl_from_locl.copy()
-            
             while self.grav_code.model_time < self.time:
                 self.stellar_code.evolve_model(self.time/2.)
                 if self.stellar_stopping.is_set():
                     print("...Detection: SN Explosion...")
                     self.chnl_from_grav.copy()
                     handle_supernova(self.stellar_stopping, 
-                                     self.stars, self.grav_code
-                                     )
+                                     self.stars, self.grav_code)
                 self.star_channel.copy()
             
                 self.grav_code.evolve_model(self.time)
                 if self.grav_stopping.is_set():
-                     print("........Encounter Detected........")
-                     self.check_merger()
+                    self.star_local_channel.copy()
+                    self.check_merger()
+                self.chnl_from_grav.copy()
                      
                 self.stellar_code.evolve_model(self.time)
                 if self.stellar_stopping.is_set():
@@ -161,12 +201,7 @@ class EvolveSystem(object):
                         self.stars, 
                         self.grav_code
                     )
-                
-                self.star_channel.copy()
-                self.chnl_from_grav.copy()
-                channel_from_se = self.stellar_code.particles.new_channel_to(self.particles)
-                channel_from_se.copy_attributes(["luminosity"])
-            
+            print(self.time, "saving")
             snap_file = os.path.join(self.dpath, "simulation_snapshot", self.fname, 
                                      f"snapshot_step_{self.siter}.amuse")
             write_set_to_file(

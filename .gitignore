@@ -1,9 +1,12 @@
 agama/
+data/150*
 data/300*
 data/600*
+data/1200*
 data/freeze_frames
 *.png
 *.pdf
 plot/figures/
 binev.data
 data/__pycache__
+test.py

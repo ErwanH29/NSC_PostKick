@@ -1,10 +1,10 @@
-import fnmatch
 import glob
 import numpy as np
 import os
+import sys
 
 from amuse.community.seba.interface import SeBa
-from amuse.ext.orbital_elements import orbital_elements_from_binary
+from amuse.ext.orbital_elements import orbital_elements
 from amuse.lab import Particles, units, write_set_to_file, constants
 from parti_initialiser import ClusterInitialise
 
@@ -16,13 +16,14 @@ def run_code(vkick, nimbh):
         vkick (float):  Rough velocity of ejected SMBH
         nimbh (int):  Target # IMBH
     """
-    TARGET_NSIMS = 5
-    SMBH_MASS = 1e6 | units.MSun
+    TARGET_NSIMS = 10
+    SMBH_mass = [1e5, 4e5, 1e6, 4e6] | units.MSun
+    SMBH_MASS = SMBH_mass[2]
     TOTAL_IMBH_MASS = 4000 | units.MSun
     
     vdisp = 200 * (SMBH_MASS/(1.66*10**8 | units.MSun))**(1/4.86) | units.kms
     sphere_of_influence = constants.G*SMBH_MASS/vdisp**2
-    rvir = 0.2*sphere_of_influence  # Approximation done in Merritt et al. 2009
+    rvir = 10**-2*sphere_of_influence
     rvir2 = (2*constants.G*SMBH_MASS)/(3*np.pi*vdisp**2)
     print("Virial Radius: ", rvir.in_(units.pc), rvir2.in_(units.pc))
     
@@ -36,7 +37,7 @@ def run_code(vkick, nimbh):
     
     print("Configuration: "+str(nimbh))
     print(f"Target = {TARGET_MASS.in_(units.MSun)} +- {(0.05*TARGET_MASS).in_(units.MSun)}")
-    data_direc = f"data/{vkick.value_in(units.kms)}kms_m1e6/"
+    data_direc = f"data/{vkick.value_in(units.kms)}kms_m{str(SMBH_MASS.value_in(units.MSun))[0]}e6/"
     config_name = "Nimbh"+str(nimbh)+"_RA_BH_Run"
     dir_path = data_direc+config_name
     nsims = len(glob.glob(dir_path+"/init_conds/*"))
@@ -46,8 +47,6 @@ def run_code(vkick, nimbh):
         os.mkdir(dir_path+"/")
         os.mkdir(dir_path+"/coll_orbital/")
         os.mkdir(dir_path+"/data_process/")
-        os.mkdir(dir_path+"/data_process/gw_calcs_all/")
-        os.mkdir(dir_path+"/data_process/gw_calcs_evolved_10Myr/")
         os.mkdir(dir_path+"/data_process/ejec_calcs/")
         os.mkdir(dir_path+"/init_conds/")
         os.mkdir(dir_path+"/init_snapshot/")
@@ -63,21 +62,11 @@ def run_code(vkick, nimbh):
         pset.bound = 0
         
         SMBH = pset[pset.mass.argmax()]
-        SMBH.velocity += [1,1,1] * (vkick/np.sqrt(3))
+        SMBH.velocity += [1,0,0] * vkick
         SMBH.bound = 1
         minor = pset - SMBH
-        pre_evol_mass = minor.mass.sum()
         pset.position -= SMBH.position
         pset.velocity -= SMBH.velocity
-        
-        stellar_code = SeBa()
-        stellar_code.particles.add_particle(minor)
-        stellar_code.evolve_model(10 | units.Myr)
-        channel = stellar_code.particles.new_channel_to(minor)
-        channel.copy_attributes(["mass", "radius"])
-        stellar_code.stop()
-        post_evol_mass = minor.mass.sum()
-        print("Mean Mass post-evolution: ", np.mean(minor.mass.in_(units.MSun)))
 
         distances = 10*rkick
         possible = (minor.position.lengths() < distances)
@@ -86,11 +75,12 @@ def run_code(vkick, nimbh):
         bin_sys = Particles()
         bin_sys.add_particle(SMBH)
         for i, parti_ in enumerate(possible_particles):
-            if i%10000 == 0:
-                print(f"#Particle {i}")
+            sys.stdout.write(f"\rProgress: {str(100*i/len(possible_particles))[:5]}%")
+            sys.stdout.flush()
+            
             bin_sys.add_particle(parti_)
 
-            kepler_elements = orbital_elements_from_binary(bin_sys, G=constants.G)
+            kepler_elements = orbital_elements(bin_sys, G=constants.G)
             ecc = abs(kepler_elements[3])
             sma = abs(kepler_elements[2]) 
             rp = sma*(1-ecc)
@@ -148,18 +138,16 @@ def run_code(vkick, nimbh):
                      'SMBH Mass: '+str(SMBH_MASS.in_(units.MSun)),
                      'IMBH Mass: '+str(TOTAL_IMBH_MASS.in_(units.MSun)),
                      'Stellar Mass: '+str(bound_stars[bound_stars.type=="star"].mass.sum().in_(units.MSun)),
-                     'Ejection Velocity: '+str(vkick),
-                     'Stellar Mass Pre-Evolution: '+str(pre_evol_mass),
-                     'Stellar Mass Post-Evolution: '+str(post_evol_mass)]
+                     'Ejection Velocity: '+str(vkick)]
             with open(os.path.join(dir_path+str("/init_conds/"), 
                 'HCSC_stats_'+str(nsims)+'.txt'), 'w') as f:
                 for line in lines:
                     f.write(line)
                     f.write('\n')
 
-
+vkick = [150, 300, 600, 1200] | units.kms
 for n in [0]:#, 2, 4, 8]:
     run_code(
-        vkick=300 | units.kms,
+        vkick=1200 | units.kms,
         nimbh=n
     )
