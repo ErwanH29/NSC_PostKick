@@ -50,6 +50,16 @@ def tickers(ax, ptype, sig_fig):
                         labelsize=TICK_SIZE)
         return ax
 
+def ZAMS_radius(mass):
+    log_mass = np.log10(mass.value_in(units.MSun))
+    mass_sq = (mass.value_in(units.MSun))**2
+    0.08353 + 0.0565*log_mass
+    0.01291 + 0.2226*log_mass
+    0.1151 + 0.06267*log_mass
+    r_zams = pow(mass.value_in(units.MSun), 1.25) * (0.1148 + 0.8604*mass_sq) / (0.04651 + mass_sq)
+
+    return r_zams | units.RSun
+
 def ecc_sma_GW(SMBH_mass):
     ecc_range = np.logspace(-3, 0, 10000)
     
@@ -421,16 +431,19 @@ plt.rcParams["mathtext.fontset"] = "cm"
         
 CDF_PLOTS = True
 SPATIAL_PLOTS = False
-CONTOUR_PLOTS = False
+CONTOUR_PLOTS = True
 TGW_PLOTS = True
 RESET_FILES = True
 PROCESS_DATA = True
 np.seterr(divide='ignore')
 
 if (RESET_FILES):
-    glob.glob("plot/figures/output/*")
-    for f in glob.glob("plot/figures/output/*"):
-        os.remove(f)
+    boolean = input("Are you sure you want to delete all files in plot/figures/output? (y/n): ")
+    if boolean == "y":
+        for f in glob.glob("plot/figures/output/*"):
+            os.remove(f)
+        for f in glob.glob("plot/figures/*.pdf"):
+            os.remove(f)
 
 AXLABEL_SIZE = 14
 TICK_SIZE = 14
@@ -448,16 +461,17 @@ for c in configs:
 for i, data_file in enumerate(files):
     print(f"I.C #{i}: {data_file}")
     
-indices_to_remove = [2, 4, 6, 8, 10, 14, 16, 
-                     18, 20, 22, 26, 28, 30, 
-                     32, 34, 38, 40, 42, 44, 
-                     46]
-gamma1_idx = [0, 3, 7, 10, 14, 17]
-files = np.delete(files, indices_to_remove)
+ignored_idx = [2, 4, 6, 8, 10, 14, 16, 
+               18, 20, 22, 26, 28, 30, 
+               32, 34, 38, 40, 42, 44, 
+               46]
+files = np.delete(files, ignored_idx)
 
 print("..Processing...")
 for i, data_file in enumerate(files):
     print(f"I.C #{i}: {data_file}")
+gamma1_idx = [0, 3, 7, 10, 14, 17, 21, 24]
+kick_params = [0, 0, 150, 300, 300, 600, 1200]
 
 bound_ecc_arr = [[ ] for i in range(len(files))]
 bound_sma_arr = [[ ] for i in range(len(files))]
@@ -475,11 +489,11 @@ for i, data_file in enumerate(files):
         mass_parameter = "4e"+str(np.log10(SMBH.mass.value_in(units.MSun)/4))
     else:
         mass_parameter = "1e"+str(np.log10(SMBH.mass.value_in(units.MSun)))
-    kick_parameter = str(abs(SMBH.vx.in_(units.kms))).split(".")[0]
+    kick_parameter = kick_params[i%len(kick_params)]
     gamma_parameter = str(data_file.split("_Gamma")[-1])
     gamma_parameter = str(gamma_parameter.split("/")[0])
     
-    print(f"Processing: {mass_parameter}MSun_V{kick_parameter}kms_{gamma_parameter}")
+    print(f"\nProcessing: {mass_parameter}MSun_V{kick_parameter}kms_{gamma_parameter}")
     labels.append(f"M{mass_parameter}MSun_V{kick_parameter}kms_{gamma_parameter}")
     minor_bodies = particles - SMBH
     particles.position -= SMBH.position
@@ -509,6 +523,7 @@ for i, data_file in enumerate(files):
             bound_true_anom_arr[i].append(true_anom.value_in(units.deg))
             bound_arg_peri_arr[i].append(arg_periapsis.value_in(units.deg))
             
+            p.radius = ZAMS_radius(p.mass)
             p.radius = p.radius*(0.844*SMBH.mass/p.mass)**(1/3)
             #tGW = tGW_scales(SMBH.mass, p.mass, sma, ecc)
             tGW = coll_scales(SMBH.radius, 
@@ -571,7 +586,7 @@ data_labels = {"Fixed Mass": [None,
 
 
 x_lims = [[0, 1], 
-          [-3, 2], 
+          [-4, 1], 
           [0, 180], 
           [-180, 180], 
           [-180, 180]]

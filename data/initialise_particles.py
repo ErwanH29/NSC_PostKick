@@ -18,21 +18,23 @@ def run_code(vkick, nimbh):
     """
     TARGET_NSIMS = 10
     SMBH_mass = [1e5, 4e5, 1e6, 4e6] | units.MSun
-    SMBH_MASS = SMBH_mass[2]
+    SMBH_MASS = SMBH_mass[3]
     TOTAL_IMBH_MASS = 4000 | units.MSun
     
     vdisp = 200 * (SMBH_MASS/(1.66*10**8 | units.MSun))**(1/4.86) | units.kms
     sphere_of_influence = constants.G*SMBH_MASS/vdisp**2
-    rvir = 10**-2*sphere_of_influence
-    rvir2 = (2*constants.G*SMBH_MASS)/(3*np.pi*vdisp**2)
-    print("Virial Radius: ", rvir.in_(units.pc), rvir2.in_(units.pc))
+    rvir = 0.01*sphere_of_influence # (2*constants.G*SMBH_MASS)/(3*np.pi*vdisp**2)
     
-    rcrop = 2*10**-4 * sphere_of_influence
+    if SMBH_MASS < 1e6 | units.MSun:
+        rcrop = 2*10**-4 * sphere_of_influence
+    else:
+        rcrop = 6.7*10**-4 * sphere_of_influence
     rkick = (constants.G*SMBH_MASS/vkick**2)
     
     gamma = 1.75
     TARGET_MASS = 11.7*gamma**-1.75 * SMBH_MASS \
         * (constants.G*SMBH_MASS/(sphere_of_influence*vkick**2))**(3-gamma)
+        
     
     
     print("Configuration: "+str(nimbh))
@@ -53,6 +55,7 @@ def run_code(vkick, nimbh):
         os.mkdir(dir_path+"/merge_snapshots/")
         os.mkdir(dir_path+"/simulation_snapshot/")
         os.mkdir(dir_path+"/simulation_stats/")
+        
     
     while nsims < (TARGET_NSIMS):
         print("...Running simulation...")
@@ -60,6 +63,10 @@ def run_code(vkick, nimbh):
         sbh_code = ClusterInitialise()
         pset = sbh_code.init_cluster(SMBH_MASS, rvir, gamma=gamma, rcavity=rcrop)
         pset.bound = 0
+        if vkick == 0 | units.kms:
+            write_set_to_file(pset, dir_path+"/init_snapshot/all", 
+                            "hdf5", close_file=True, overwrite_file=False)
+            STOP
         
         SMBH = pset[pset.mass.argmax()]
         SMBH.velocity += [1,0,0] * vkick
@@ -68,7 +75,7 @@ def run_code(vkick, nimbh):
         pset.position -= SMBH.position
         pset.velocity -= SMBH.velocity
 
-        distances = 10*rkick
+        distances = 8*rkick
         possible = (minor.position.lengths() < distances)
         possible_particles = minor[possible]
         
@@ -102,10 +109,6 @@ def run_code(vkick, nimbh):
             if nimbh > 0:
                 imbh = bound_stars.random_sample(nimbh)
                 imbh.mass = TOTAL_IMBH_MASS/nimbh
-                imbh.type = "IMBH"
-                imbh.radius = sbh_code.isco_radius(imbh.mass)
-                imbh.collision_radius = sbh_code.coll_radius(imbh.radius)
-                print("# IMBH", len(imbh))
             
             print("Cluster mass: ", pset[pset.type!="smbh"].mass.sum())
             type, counts = (np.unique(pset.type, return_counts=True))
@@ -148,6 +151,6 @@ def run_code(vkick, nimbh):
 vkick = [150, 300, 600, 1200] | units.kms
 for n in [0]:#, 2, 4, 8]:
     run_code(
-        vkick=1200 | units.kms,
+        vkick=600 | units.kms,
         nimbh=n
     )

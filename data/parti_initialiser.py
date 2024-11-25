@@ -48,7 +48,7 @@ class ClusterInitialise(object):
             particles (object):  Particle set
         """
         SMBH_parti = MW_SMBH(mass)
-        nStar = 20000
+        nStar = 200000
 
         particles = Particles(1)
         particles[0].type = "smbh"
@@ -59,7 +59,6 @@ class ClusterInitialise(object):
         stars = Particles(nStar)
         masses = self.star_mass(nStar)
         stars.mass = masses
-        
         stellar_code = SeBa()
         stellar_code.particles.add_particle(stars)
         stellar_code.evolve_model(10 | units.Myr)
