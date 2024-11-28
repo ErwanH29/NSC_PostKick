@@ -48,7 +48,8 @@ class ClusterInitialise(object):
             particles (object):  Particle set
         """
         SMBH_parti = MW_SMBH(mass)
-        nStar = 200000
+        nStar = 430000#int(SMBH_parti.mass / (3.8 | units.MSun))
+        print(f"#Stars ={nStar}")
 
         particles = Particles(1)
         particles[0].type = "smbh"
@@ -66,10 +67,12 @@ class ClusterInitialise(object):
         channel.copy_attributes(["mass", "stellar_type"])
         stellar_code.stop()
         
+        cluster_mass = stars.mass.sum() + SMBH_parti.mass
+        
         agama.setUnits(mass=1, length=10**-3, velocity=1)
         c_pot = agama.Potential(type='Dehnen', gamma=gamma, 
                                 scaleRadius=rvir.value_in(units.pc), 
-                                mass=stars.mass.sum().value_in(units.MSun))
+                                mass=cluster_mass.value_in(units.MSun))
         bh_pot = agama.Potential(type='plummer', 
                                  mass=SMBH_parti.mass.value_in(units.MSun), 
                                  scaleRadius=0)
@@ -81,6 +84,7 @@ class ClusterInitialise(object):
         stars.position = xv[:,:3] | units.pc
         stars.velocity = xv[:,3:] | units.kms
         stars -= stars[stars.position.lengths() < rcavity]
+        #stars.mass = mass | units.MSun
         particles.add_particles(stars)
         
         particles.Nej = 0

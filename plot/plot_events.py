@@ -7,6 +7,7 @@ import matplotlib.ticker as mticker
 from matplotlib import cm
 import matplotlib.colors as mcolors
 import matplotlib.ticker as mtick
+import matplotlib.patheffects as path_effects
 import natsort
 import numpy as np
 from scipy.stats import gaussian_kde
@@ -15,7 +16,7 @@ import sys
 from amuse.ext.LagrangianRadii import LagrangianRadii
 from amuse.ext.orbital_elements import orbital_elements
 from amuse.lab import read_set_from_file, units, constants
-from amuse.lab import Particle, Particles
+from amuse.lab import Particles
 
 class NCSCPlotter(object):
     def __init__(self):
@@ -235,8 +236,11 @@ class NCSCPlotter(object):
             ax.set_xlabel(r"$t$ [kyr]", fontsize=self.AXLABEL_SIZE)
             ax.set_ylabel(r"$N_{\rm coll}$", fontsize=self.AXLABEL_SIZE)
             
+            print(f"{config_name[label]}")
             for i in range(len(data_array)):
                 if i == 0:
+                    print(f"{data_labels[i]}= {data_array[i][label][0][-1]},")
+                    print(f"+{data_array[i][label][2][-1]}, -{data_array[i][label][1][-1]}")
                     ax.plot(time_array, data_array[i][label][0], 
                             color=self.cmap_colours[i],
                             label=data_labels[i],
@@ -254,6 +258,7 @@ class NCSCPlotter(object):
                         color=self.cmap_colours[i], 
                     alpha=0.3)
                 elif i != (len(data_array) - 1):
+                    print(f"{data_labels[i]}= {data_array[i][label][0][-1]}")
                     ax.plot(time_array, data_array[i][label][0], 
                             color=self.cmap_colours[i],
                             label=data_labels[i],
@@ -305,75 +310,136 @@ class NCSCPlotter(object):
         data_configs = [m1e5_300kms, m1e5_600kms, m4e5_300kms, m4e5_600kms]
         config_name = ["1e5_300kms", "1e5_600kms", "4e5_300kms", "4e5_600kms"]
         
-        hvs_vels = [ ]
-        hvs_time = [ ]
+        sma_arr = [ ]
+        ecc_arr = [ ]
+        inc_arr = [ ]
         for i, IC_params in enumerate(data_configs):
             print(f"Configuration: {config_name[i]}")
             
-            hvs_vels_run = [ ]
-            hvs_time_run = [ ]
+            sma_df = [ ]
+            ecc_df = [ ]
+            inc_df = [ ]
             for iter, run in enumerate(IC_params):
                 data_files = natsort.natsorted(glob.glob(f"{run}/*"))
-                
-                already_ejected_keys = np.asarray([ ])
-                for dt, file in enumerate(data_files[-2:]):
-                    sys.stdout.write(f"\rProgress: {str(100*dt/len(data_files))[:5]}%")
+                particle_set = read_set_from_file(data_files[-1], format="amuse")
+                SMBH = particle_set[particle_set.mass.argmax()]
+                minor = particle_set - SMBH
+
+                lag = LagrangianRadii(particle_set)[-2]
+                for i, p in enumerate(minor):
+                    sys.stdout.write(f"\rProgress: {str(100*i/len(minor))[:5]}%")
                     sys.stdout.flush()
                     
-                    time = dt * 10 | units.yr
-                    particle_set = read_set_from_file(file, format="amuse")
-                    SMBH = particle_set[particle_set.mass.argmax()]
-                    minor = particle_set - SMBH
-                    for i, p in enumerate(minor):
-                        if len(already_ejected_keys[already_ejected_keys == p.key]) > 0:
-                            particle_set -= p
-                            minor -= p
-                            
-                    minor = particle_set - SMBH
-                    lag = LagrangianRadii(particle_set)[-2]
-                    for i, p in enumerate(minor):
-                        rij = p.position - SMBH.position
-                        vij = p.velocity - SMBH.velocity
-                        trajectory = (np.dot(rij, vij))/(rij.length() * vij.length()) 
-                        if trajectory > 0 and rij.length() > 1.5*lag:
-                            bin_system = Particles()
-                            bin_system.add_particle(SMBH)
-                            bin_system.add_particle(p)
-                            
-                            ke = orbital_elements(bin_system, G=constants.G)
-                            ecc = ke[3]
-                            if ecc > 1 and vij.length() < (10**4 | units.kms):
-                                vij = p.velocity - particle_set.center_of_mass_velocity()
-                                
-                                already_ejected_keys = np.concatenate((already_ejected_keys, p.key), axis=None)
-                                hvs_vels_run.append(vij.length().value_in(units.kms))
-                                hvs_time_run.append(time.value_in(units.yr))
-            
-            hvs_vels.append(hvs_vels_run)
-            hvs_time.append(hvs_time_run)
+                    rij = p.position - SMBH.position
+                    vij = p.velocity - SMBH.velocity
+                    trajectory = (np.dot(rij, vij))/(rij.length() * vij.length()) 
+                    
+                    bin_sys = Particles()
+                    bin_sys.add_particle(SMBH)
+                    bin_sys.add_particle(p)
+                    
+                    ke = orbital_elements(p, G=constants.G)
+                    sma = ke[2]
+                    ecc = ke[3]
+                    true_anom = ke[4]
+                    inc = ke[5]
+                    arg_periapsis = ke[7]
+                    if trajectory > 0 and rij.length() > 1.5*lag and ecc > 1:
+                        continue
+                    
+                    sma_df.append(np.log10(sma.value_in(units.pc)))
+                    ecc_df.append(ecc)
+                    inc_df.append(inc.value_in(units.degree))
+            sma_arr.append(sma_df)
+            ecc_arr.append(ecc_df)
+            inc_arr.append(inc_df)
         
-        fig, ax = plt.subplots(figsize=(8, 6))
-        ax.set_xlabel(r"$v_{\rm eject}$", fontsize=self.AXLABEL_SIZE)
-        ax.set_ylabel(r"$N_{<}$", fontsize=self.AXLABEL_SIZE)
-        self.tickers(ax, "plot", False)
-        max_y = 0
+        levels = [1e-2, 1e-1, 0.5, 0.9]
         for label in range(len(config_name)):
-            vij_data = hvs_vels[label]
-            if len(vij_data) == 0:
-                continue
-            sorted_vij = np.sort(vij_data)
-            yvals = np.arange(len(sorted_vij))
-            ax.plot(
-                sorted_vij, yvals, 
-                color=self.colours[label//2],
-                label=self.data_labels[label],
-                ls=self.ls[label%2]
-            )
-            max_y = max(max_y, yvals[-1])
-        ax.legend(fontsize=self.TICK_SIZE)
-        ax.set_ylim(0, max_y)
-        plt.savefig(f"plot/figures/ALL_hist_vejec.pdf", dpi=300, bbox_inches='tight')
+            
+            values = np.vstack([sma_arr, ecc_arr])
+            xx, yy = np.mgrid[-3:2:400j, 0:1:400j]
+            positions = np.vstack([xx.ravel(), yy.ravel()])
+            kernel = gaussian_kde(values, bw_method = "silverman")
+            f = np.reshape(kernel(positions).T, xx.shape)
+            f_min, f_max = np.min(f), np.max(f)
+            fnorm = (f - f_min) / (f_max - f_min)
+                
+            fig, ax = plt.subplots(figsize=(8, 6))
+            ax.set_xlabel(r"$\log_{10}a$ [pc]", fontsize=self.AXLABEL_SIZE)
+            ax.set_ylabel(r"$e$", fontsize=self.AXLABEL_SIZE)
+            self.tickers(ax, "plot", False)
+            ax.contourf(xx, yy, fnorm, cmap="Blues", levels=levels, zorder=1, extend="max")
+            cset = ax.contour(xx, yy, fnorm, colors="k", levels=levels, zorder=2)
+            
+            ax.clabel(cset, inline=1, fontsize=10)
+            ax.set_xlim(-3, 2)
+            ax.set_ylim(0, 1)
+            plt.savefig(f"plot/figures/final_contour_sma_ecc_{config_name[label]}.pdf", dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            values = np.vstack([sma_arr, inc_arr])
+            xx, yy = np.mgrid[-3:2:400j, -180:180:400j]
+            positions = np.vstack([xx.ravel(), yy.ravel()])
+            kernel = gaussian_kde(values, bw_method = "silverman")
+            f = np.reshape(kernel(positions).T, xx.shape)
+            f_min, f_max = np.min(f), np.max(f)
+            fnorm = (f - f_min) / (f_max - f_min)
+                
+            fig, ax = plt.subplots(figsize=(8, 6))
+            ax.set_xlabel(r"$\log_{10}a$ [pc]", fontsize=self.AXLABEL_SIZE)
+            ax.set_ylabel(r"$i$ [$^{\circ}$]", fontsize=self.AXLABEL_SIZE)
+            self.tickers(ax, "plot", False)
+            ax.contourf(xx, yy, fnorm, cmap="Blues", levels=levels, zorder=1, extend="max")
+            cset = ax.contour(xx, yy, fnorm, colors="k", levels=levels, zorder=2)
+            
+            ax.clabel(cset, inline=1, fontsize=10)
+            ax.set_xlim(-3, 2)
+            ax.set_ylim(-180, 180)
+            plt.savefig(f"plot/figures/final_contour_sma_inc_{config_name[label]}.pdf", dpi=300, bbox_inches='tight')
+            plt.close()
+    
+    def plot_cluster_initial(self):
+        """Plot the system in x, y coordinates"""
+        initial_bodies = read_set_from_file("data/600kms_m4e5/Nimbh0_RA_BH_Run/init_snapshot/config_0_bound.hdf5", "hdf5")
+        initial_bodies.position -= initial_bodies[initial_bodies.mass.argmax()].position
         
+        levels = [1e-2, 1e-1, 0.5, 0.999]
+        values = np.vstack([initial_bodies.x.value_in(units.pc), 
+                            initial_bodies.y.value_in(units.pc)])
+        xx, yy = np.mgrid[-0.1:0.1:500j, -0.1:0.1:500j]
+        positions = np.vstack([xx.ravel(), yy.ravel()])
+        kernel = gaussian_kde(values, bw_method=0.04)
+        f = np.reshape(kernel(positions).T, xx.shape)
+
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.set_aspect('equal')
+        self.tickers(ax, "plot", False)
+        ax.set_xlim(-0.1, 0.1)
+        ax.set_ylim(-0.1, 0.1)
+        ax.set_xlabel(r"$x$ [pc]", fontsize=self.AXLABEL_SIZE)
+        ax.set_ylabel(r"$y$ [pc]", fontsize=self.AXLABEL_SIZE)
+
+        cset = ax.contour(xx, yy, f, colors="k", levels=levels, zorder=1)
+        ax.scatter(initial_bodies[initial_bodies.mass.argmax()].x.value_in(units.pc), 
+                    initial_bodies[initial_bodies.mass.argmax()].y.value_in(units.pc), 
+                    color="black", s=5, zorder=3)
+
+        ax.arrow(-0.6, 0.53, 0.2, 0., lw=5, head_width=0.03, fill=True, 
+                    facecolor="black", zorder=3)
+        text = ax.text(-0.5, 0.6, r"$v_{\rm kick}$", 
+                        horizontalalignment="center", 
+                        fontsize=self.AXLABEL_SIZE+10)
+        text.set_path_effects([
+            path_effects.Stroke(linewidth=5, foreground='white'),
+            path_effects.Normal()
+        ])
+
+        fname = "plot/figures/HCSC_system_plot.png"
+        plt.savefig(fname, dpi=250, bbox_inches='tight')
+        plt.close()
+        plt.clf()
+    
     def sma_ecc_traj_colls(self):
         """Plot collision trajectory of a specific run"""
         
@@ -528,5 +594,6 @@ class NCSCPlotter(object):
         
 plot = NCSCPlotter()
 plot.plot_GW_vs_time()
-plot.sma_ecc_traj_colls()
+plot.plot_cluster_initial()
 plot.plot_cluster_evolution()
+plot.sma_ecc_traj_colls()

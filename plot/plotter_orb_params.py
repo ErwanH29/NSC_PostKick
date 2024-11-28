@@ -133,15 +133,15 @@ def CDF_plots_sep(data_df, data_labels, fig_name, colour_array, x_label, config_
     ax.set_ylabel(r"$f_<$", fontsize=AXLABEL_SIZE)
     ax.set_xlabel(x_label, fontsize=AXLABEL_SIZE)
     for k in range(len(sma_df)):
-        if k == 0 or k == 3:
+        if k == 0:
             continue
         else:
-            print("CDF_PLOTS_SEP", fig_name, "# data", len(sma_df[k]))
             sorted_sma = np.sort(sma_df[k])
             sma_number = [(i)/(len(sorted_sma)) for i in range(len(sorted_sma))]
             sorted_rij = np.sort(sep_df[k])
-            rij_number = [(i)/len(sorted_rij) for i in range(len(sorted_rij))]    
-            if len(colour_array) > 3:
+            rij_number = [(i)/len(sorted_rij) for i in range(len(sorted_rij))]   
+            print("CDF_PLOTS_SEP", fig_name, "# data", len(sma_df[k]))
+            if k != 3 and len(colour_array) > 3:
                 print(data_labels[k])
                 ax.plot(
                     sorted_sma, sma_number, 
@@ -404,8 +404,8 @@ def tGW_plot(data, file_name, colours, labels):
 
 def rkick_vs_rHCSC():
     vkick = [150, 300, 600, 1200]
-    ratio_1e5 = [5.47267474113424, 5.617432704403266, 4.42392944505244, 2.8638758599209257]
-    ratio_4e5 = [6.92616439566982, 6.199079897495372, 5.12452540921801, 3.7331061078887817]
+    ratio_1e5 = [4.91818517948435, 3.18597474749642, 3.0836525499447553, 2.644278523970566]
+    ratio_4e5 = [4.512628990413066, 3.6668649477905144, 3.260429119017815, 3.33496857943008]
     ratio_1e6 = [6.56620389246099, 6.420353760524145, 5.83523681059988, 4.0532758889421565]
     ratio_4e6 = [6.930077365196966, 6.536250231327551, 6.26799672111641, 5.134874958074158]
     
@@ -484,6 +484,10 @@ labels = [ ]
 for i, data_file in enumerate(files):
     particles = read_set_from_file(data_file, "hdf5")
     SMBH = particles[particles.mass.argmax()]
+    minor_bodies = particles - SMBH
+    print(f"\nProcessing: {data_file}", end=", ")
+    print(f"MSMBH [/1e5] = {SMBH.mass.value_in(units.MSun)/10**5}", end=", ")
+    print(f"MMinor [/1e5]= {minor_bodies.mass.sum().value_in(units.MSun)/10**5}")
     
     if i > 13:
         mass_parameter = "4e"+str(np.log10(SMBH.mass.value_in(units.MSun)/4))
@@ -493,9 +497,7 @@ for i, data_file in enumerate(files):
     gamma_parameter = str(data_file.split("_Gamma")[-1])
     gamma_parameter = str(gamma_parameter.split("/")[0])
     
-    print(f"\nProcessing: {mass_parameter}MSun_V{kick_parameter}kms_{gamma_parameter}")
     labels.append(f"M{mass_parameter}MSun_V{kick_parameter}kms_{gamma_parameter}")
-    minor_bodies = particles - SMBH
     particles.position -= SMBH.position
     particles.velocity -= SMBH.velocity
     
@@ -562,7 +564,7 @@ colour_array = {"Fixed Mass": carray,
 data_type = {"Fixed Mass": [[0, 1, 2, 3, 4, 5, 6], 
                             [14, 15, 16, 17, 18, 19, 20], 
                             [7, 8, 9, 10, 11, 12, 13],
-                            [21, 22, 23, 24, 25, 26, 27],],
+                            [21, 22, 23, 24, 25, 26, 27]],
              "Fixed Vkick": [[2, 16, 9, 23],
                              [4, 18, 11, 25],
                              [5, 19, 12, 26],
@@ -583,7 +585,6 @@ data_labels = {"Fixed Mass": [None,
                                r"$10^{6}$ M$_\odot$",
                                r"$4\times10^{6}$ M$_\odot$",]
                }
-
 
 x_lims = [[0, 1], 
           [-4, 1], 
@@ -613,6 +614,7 @@ if (CDF_PLOTS):
                 df = [df_vals[i] for i in data_ID]
                 df2 = [bound_sep_arr[i] for i in data_ID]
                 df = [df, df2]
+                print(x_labels[l], df)
                 CDF_plots_sep(
                     df, config_name, fname, 
                     colours, x_labels[l], 
@@ -628,6 +630,7 @@ if (CDF_PLOTS):
                     config_label, 
                     x_lims[l]
                 )
+    STOP
     
     # Plot fixing kick
     data_idx = data_type["Fixed Vkick"]
