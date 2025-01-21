@@ -41,9 +41,9 @@ def run_code(file, eta, tend, config, run_no):
     no_files = 0
 
     pset = read_set_from_file(file, "hdf5")
-    SMBH = pset[pset.mass == pset.mass.max()]
+    SMBH = pset[pset.mass.argmax()]
     SMBH.stellar_type = 14 | units.stellar_type
- 
+    
     compact_objects = pset.stellar_type > 13 | units.stellar_type
     pset[compact_objects].radius = 3*(2*constants.G*pset[compact_objects].mass)/(constants.c**2)
     pset[~compact_objects].radius = stellar_tidal_radius(pset[~compact_objects], SMBH.mass)
@@ -52,7 +52,7 @@ def run_code(file, eta, tend, config, run_no):
     output_dir = config.split("config")[0]
     code_conv = nbody_system.nbody_to_si(pset.mass.sum(), 1 | units.pc)
     evolve_system = EvolveSystem(pset, tend, eta, code_conv, SMBH,
-                                 no_worker=4, dir_path=output_dir,
+                                 no_worker=15, dir_path=output_dir,
                                  fname=fname, no_files=no_files)
     evolve_system.initialise_code()
     evolve_system.run_code()
@@ -61,19 +61,18 @@ def run_code(file, eta, tend, config, run_no):
 vkick = "300"
 mSMBH = "1e5"
 Nimbh = 0
-run_no = 9 
-suffix = "bound"
+run_no = 0
+suffix = "all"
 
 data_config = f"data/{vkick}kms_m{mSMBH}/Nimbh{Nimbh}_RA_BH_Run"
 output_dir = f"{data_config}/config_{run_no}"
-data_file = f"{data_config}/init_snapshot/config_{run_no}_{suffix}"
+data_file = f"{data_config}/init_snapshot/config_{run_no}_{suffix}.hdf5"
 
-eta = 1e-3
-tend = 10 | units.kyr
+eta = 1e-2
+tend = 100 | units.kyr
 
 run_code(file=data_file, 
          eta=eta, 
          tend=tend, 
          config=output_dir,
          run_no=run_no)
-

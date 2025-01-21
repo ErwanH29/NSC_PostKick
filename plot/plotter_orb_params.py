@@ -274,7 +274,7 @@ def CDF_plots(data_df, data_labels, fig_name, colour_array, x_label, config_labe
 
 def plot_system():
     """Plot the system in x, y coordinates"""
-    data_file = "data/bodies_4e5_300kms_Gamma1.75.hdf5"
+    data_file = "/media/erwanh/Elements/BH_Post_Kick/bodies_4e5_300kms_Gamma1.75.hdf5"
     crop_dist = 0.7
     initial_bodies = read_set_from_file(data_file, "hdf5")
     initial_bodies.position -= initial_bodies[initial_bodies.mass.argmax()].position
@@ -360,9 +360,15 @@ def contour_plots(x_data, y_data, xlims, ylims, fname, y_label):
     fig, ax = plt.subplots(figsize=(8, 6))
     ax.contourf(xx, yy, fnorm, cmap="Blues", levels=levels, zorder=1, extend="max")
     cset = ax.contour(xx, yy, fnorm, colors="k", levels=levels, zorder=2)
-    #if SMBH_mass is not None:
-    #    ecc_data, sma_data = ecc_sma_GW(SMBH_mass)
-    #    ax.plot(np.log10(sma_data), ecc_data, color="red", zorder=3)
+    if y_label == r"$e$":
+        smbh_mass = 1e6 | units.MSun
+        rk = constants.G*smbh_mass/(1200 | units.kms)**2
+        x_curve = np.logspace(-4, 2, 1000) | units.pc
+        y_curve = [1+rk/i for i in x_curve]
+        ax.plot(np.log10(x_curve.value_in(units.pc)), y_curve, color="red", linestyle="--", zorder=3)
+        
+        y_curve = [1+rk/(10*i) for i in x_curve]
+        ax.plot(np.log10(x_curve.value_in(units.pc)), y_curve, color="red", linestyle=":", zorder=3)
     
     ax.clabel(cset, inline=1, fontsize=10)
     ax.set_xlabel(r"$\log_{10} a$ [pc]", fontsize=AXLABEL_SIZE)
@@ -401,6 +407,106 @@ def tGW_plot(data, file_name, colours, labels):
         ax.legend(fontsize=AXLABEL_SIZE-2)
         plt.savefig(file_name, dpi=300, bbox_inches='tight')
     plt.close()
+
+def change_orb_params(data_file, vkick):
+    """
+    Plot change in orbital parameters for the bound stars pre- and post-kick
+    
+    Args:
+        data_file (String):  Particle set file
+        vkick (float):  Kick velocity
+    """
+    pre_kick = read_set_from_file(data_file, "hdf5")
+    post_kick = pre_kick.copy()
+    print(len(pre_kick))
+    
+    SMBH_pre = pre_kick[pre_kick.mass.argmax()]
+    SMBH_post = post_kick[post_kick.mass.argmax()]
+    SMBH_post.vx += vkick
+    
+    bound_pre = Particles()
+    bound_post = Particles()
+    bound_pre.add_particle(SMBH_pre)
+    bound_post.add_particle(SMBH_post)
+    
+    sma_df = [[ ], [ ], [ ]]
+    ecc_df = [[ ], [ ], [ ]]
+    inc_df = [[ ], [ ], [ ]]
+    true_anom_df = [[ ], [ ], [ ]]
+    arg_peri_df = [[ ], [ ], [ ]]
+    for particle in post_kick:
+        bin_sys = Particles(particles=[particle, SMBH_post])
+        ke = orbital_elements(bin_sys, G=constants.G)
+        sma = ke[2]
+        ecc = ke[3]
+        true_anom = ke[4]
+        inc = ke[5]
+        arg_periapsis = ke[7]
+        
+        if ecc < 1:
+            sma_df[1].append(np.log10(sma.value_in(units.pc)))
+            ecc_df[1].append(ecc)
+            inc_df[1].append(inc.value_in(units.deg))
+            true_anom_df[1].append(true_anom.value_in(units.deg))
+            arg_peri_df[1].append(arg_periapsis.value_in(units.deg))
+            
+            particle_in_pre = pre_kick[pre_kick.key == particle.key]
+            bin_sys = Particles(particles=[particle_in_pre, SMBH_pre])
+            ke = orbital_elements(bin_sys, G=constants.G)
+            sma_df[0].append(np.log10(ke[2].value_in(units.pc)))
+            ecc_df[0].append(ke[3])
+            inc_df[0].append(ke[5].value_in(units.deg))
+            true_anom_df[0].append(ke[4].value_in(units.deg))
+            arg_peri_df[0].append(ke[7].value_in(units.deg))
+    
+    for particle in pre_kick:
+        bin_sys = Particles(particles=[particle, SMBH_pre])
+        ke = orbital_elements(bin_sys, G=constants.G)
+        sma = ke[2]
+        ecc = ke[3]
+        true_anom = ke[4]
+        inc = ke[5]
+        arg_periapsis = ke[7]
+        
+        if ecc < 1:
+            sma_df[2].append(np.log10(sma.value_in(units.pc)))
+            ecc_df[2].append(ecc)
+            inc_df[2].append(inc.value_in(units.deg))
+            true_anom_df[2].append(true_anom.value_in(units.deg))
+            arg_peri_df[2].append(arg_periapsis.value_in(units.deg))
+    
+    variable = ["sma", "ecc", "inc", "true_anom", "arg_peri"]
+    x_labels = [r"$\log_{10} a$ [pc]",
+                r"$e$",
+                r"$i$ [$^{\circ}$]",
+                r"$\nu$ [$^{\circ}$]",
+                r"$\omega$ [$^{\circ}$]"]
+    x_data = [sma_df, ecc_df, inc_df, true_anom_df, arg_peri_df]
+    x_lims = [[-4,1], [1e-4,1], [1e-4,180], [-180,180], [-180,180]]
+    for i, data in enumerate(x_data):
+        
+        sorted_pre = np.sort(data[0])
+        sorted_post = np.sort(data[1])
+        sorted_all = np.sort(data[2])
+        
+        y_pre = [(i)/(len(sorted_pre)) for i in range(len(sorted_pre))]
+        y_post = [(i)/(len(sorted_post)) for i in range(len(sorted_post))]
+        y_all = [(i)/(len(sorted_all)) for i in range(len(sorted_all))]
+        
+        fig, ax = plt.subplots(figsize=(8, 6))
+        tickers(ax, "plot", False)
+        ax.set_ylabel(r"$f_<$", fontsize=AXLABEL_SIZE)
+        ax.set_xlabel(x_labels[i], fontsize=AXLABEL_SIZE)
+        ax.plot(sorted_pre, y_pre, color="red", label="Bound Pre-kick")
+        ax.plot(sorted_post, y_post, color="blue", label="Bound Post-kick")
+        ax.plot(sorted_all, y_all, color="black", label="All")
+        ax.set_xlim(x_lims[i][0], x_lims[i][1])
+        ax.legend(fontsize=AXLABEL_SIZE-2)
+        ax.set_ylim(1e-4,1)
+        
+        fname = f"plot/figures/{variable[i]}_CDF.pdf"
+        plt.savefig(fname, dpi=300, bbox_inches='tight')
+        plt.clf()
 
 def rkick_vs_rHCSC():
     vkick = [150, 300, 600, 1200]
@@ -452,7 +558,7 @@ colours = ["black", "red", "blue"]
 linestyle = [":", "-"]
 files = [ ]
 
-configs = natsort.natsorted(glob.glob("data/freeze_frames/*"))
+configs = natsort.natsorted(glob.glob("/media/erwanh/Elements/BH_Post_Kick/data/freeze_frames/*"))
 configs = [i for i in configs if "hdf5" not in i]
 for c in configs:
     particle_sets = natsort.natsorted(glob.glob(f"{c}/*.hdf5"))
@@ -460,6 +566,11 @@ for c in configs:
 
 for i, data_file in enumerate(files):
     print(f"I.C #{i}: {data_file}")
+
+chosen_file = 1
+change_orb_params(files[chosen_file], vkick=300|units.kms)
+
+STOP
     
 ignored_idx = [2, 4, 6, 8, 10, 14, 16, 
                18, 20, 22, 26, 28, 30, 
@@ -630,7 +741,6 @@ if (CDF_PLOTS):
                     config_label, 
                     x_lims[l]
                 )
-    STOP
     
     # Plot fixing kick
     data_idx = data_type["Fixed Vkick"]

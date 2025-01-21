@@ -43,8 +43,7 @@ def handle_coll(parti, parti_in_enc, tcoll, dir_path, stellar_type):
              "Inclination: {} deg".format(inc),
              "Argument of Periapsis: {} deg".format(arg_peri),
              "Longitude of Asc. Node: {} deg".format(asc_node),
-             "True Anomaly: {} deg\n".format(true_anm)
-            ]
+             "True Anomaly: {} deg\n".format(true_anm)]
 
     with open(os.path.join(dir_path, f'merger_{np.sum(parti.coll_events)}.txt'), 'w') as f:      
         for line_ in lines:
@@ -61,8 +60,10 @@ def handle_coll(parti, parti_in_enc, tcoll, dir_path, stellar_type):
     new_particle.position = com_pos
     new_particle.velocity = com_vel
     new_particle.coll_events = (p1.coll_events + p2.coll_events) + 1
-    if max(parti_in_enc.mass) > 125 | units.MSun:
+    if max(parti_in_enc.stellar_type) > 13 | units.stellar_type:
        new_particle.radius = (6.*constants.G*new_particle.mass)/(constants.c**2.)
+    elif max(parti_in_enc.stellar_type) > 10 | units.stellar_type:
+       new_particle.radius = max(parti_in_enc.radius)
     else:
        new_particle.radius = ZAMS_radius(new_particle.mass)
     new_particle.stellar_type = max(stellar_type)

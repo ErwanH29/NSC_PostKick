@@ -18,6 +18,23 @@ from amuse.ext.orbital_elements import orbital_elements
 from amuse.lab import read_set_from_file, units, constants
 from amuse.lab import Particles
 
+
+def moving_average(array, smoothing):
+    """
+    Conduct running average of some variable
+    
+    Args:
+        array (list):     Array hosting values
+        smoothing (float): Number of elements to average over
+    Returns:
+        value (list):  List of values smoothed over some length
+    """
+    value = np.cumsum(array, dtype=float)
+    value[smoothing:] = value[smoothing:] - value[:-smoothing]
+
+    return value[smoothing-1:]/smoothing
+
+
 class NCSCPlotter(object):
     def __init__(self):
         self.AXLABEL_SIZE = 14
@@ -33,11 +50,11 @@ class NCSCPlotter(object):
         black_rgba = matplotlib.colors.to_rgba("black")
         cmap = matplotlib.colormaps['cool']
         self.cmap_colours = np.vstack((black_rgba, cmap(np.linspace(0.1, 1, 3))))
-        self.ls = ["-", ":"]
+        self.ls = ["-", "-."]
         
     def extract_folder(self, SMBH_mass, vkick, folder):
         """Extract the data folders"""
-        data_folders = natsort.natsorted(glob.glob(f"data/{vkick}kms_m{SMBH_mass}/Nimbh0_RA_BH_Run/{folder}/*"))
+        data_folders = natsort.natsorted(glob.glob(f"/media/erwanh/Elements/BH_Post_Kick/data/{vkick}kms_m{SMBH_mass}/Nimbh0_RA_BH_Run/{folder}/*"))
         return data_folders
         
     def tickers(self, ax, ptype, sig_fig):
@@ -127,13 +144,31 @@ class NCSCPlotter(object):
                 bound_particles -= p
                 
         return bound_particles
-     
+    
+    def stone_TDE_rate(self, mSMBH, vkick, time):
+        """
+        Calculate cumulative TDE rate based on equation 39 of arXiv:1105.4966 
+        
+        Args:
+            mSMBH (mass):  SMBH mass
+            vkick (float):  Kick velocity
+            time (float):  Time of simulation
+        Return:
+            float:  Total TDE rate
+        """
+        rinfl = 22 * (mSMBH/(1e8 | units.MSun))**0.55  | units.pc #  Equation 14, for cusp galaxies (MSMBH < 1e8 MSun)
+        rinfl = 0.23 | units.pc
+        print(rinfl.value_in(units.pc))
+        nTDE = 1.5e-6 * (mSMBH/(1e7 | units.MSun)) * (rinfl/(10 | units.pc))**-2 * (vkick/(1000 | units.kms))**-1 | units.yr**-1
+        total_TDE = nTDE * time
+        return total_TDE
+    
     def plot_GW_vs_time(self):
         """Plot GW events occuring in time"""
         
-        BIN_RESOLUTION = 10000
-        TIME_PER_BIN = 1 | units.yr
-        time_array = np.linspace(10**-4, 10, BIN_RESOLUTION)
+        BIN_RESOLUTION = 2000
+        TIME_PER_BIN = 10 | units.yr
+        time_array = np.linspace(10**-4, 20, BIN_RESOLUTION)
         
         m1e5_300kms = self.extract_folder("1e5", 300, "coll_orbital")
         m1e5_600kms = self.extract_folder("1e5", 600, "coll_orbital")
@@ -142,6 +177,8 @@ class NCSCPlotter(object):
         
         data_configs = [m1e5_300kms, m1e5_600kms, m4e5_300kms, m4e5_600kms]
         config_name = ["1e5_300kms", "1e5_600kms", "4e5_300kms", "4e5_600kms"]
+        vkick_arr = [300, 600] | units.kms
+        msmbh_arr = [1e5, 4e5] | units.MSun
         
         coll_events_arr = [ ]
         emri_events_arr = [ ]
@@ -154,8 +191,10 @@ class NCSCPlotter(object):
             tde_events_run = [ ]
             tde_smbh_events_run = [ ]
             ss_events_run = [ ]
+            
             for iter, run in enumerate(IC_params):
                 data_files = natsort.natsorted(glob.glob(f"{run}/*"))
+                
                 if len(data_files) > 2:
                     coll_events_df = np.zeros(BIN_RESOLUTION)
                     GW_events_df = np.zeros(BIN_RESOLUTION)
@@ -171,29 +210,48 @@ class NCSCPlotter(object):
                             tcoll = float(tcoll_string.split(" ")[1]) | units.yr
                             mass_a = float(lines[3].split("[")[1].split("]")[0]) | units.MSun
                             mass_b = float(lines[4].split("[")[1].split("]")[0]) | units.MSun
-                            type_a = str(lines[5].split("quantity")[1].split("-")[1][:-3])
-                            type_b = str(lines[5].split("quantity")[2].split("-")[1][:-2])
+                            type_a = int(lines[5].split("<")[1].split("- ")[0])
+                            type_b = int(lines[5].split("<")[2].split("- ")[0])
+                            
+                            print(type_a, type_b)
                             
                             idx = int(tcoll/TIME_PER_BIN)
                             coll_events_df[idx:] += 1
-                            
-                            if type_a == "Black Hole" and type_b == "Black Hole":
-                                if max(mass_a/mass_b, mass_b/mass_a) > 1e4:
-                                    emri_events_df[idx:] += 1
-                                else:
+                            if type_a == 14: # Type a is BH
+                                if type_b == 14:
+                                    if max(mass_a/mass_b, mass_b/mass_a) > 1e4:
+                                        emri_events_df[idx:] += 1
+                                    else:
+                                        GW_events_df[idx:] += 1
+                                elif type_b >= 10:  # Type b is compact object
                                     GW_events_df[idx:] += 1
-                            elif "Black Hole" not in type_a and "Black Hole" not in type_b:
-                                ss_events_df[idx:] += 1
-                            else:
+                                else:
+                                    tde_events_df[idx:] += 1
+                            
+                            elif type_a >= 10:  # Type a is compact object
+                                if type_b == 14:
+                                    if max(mass_a/mass_b, mass_b/mass_a) > 1e4:
+                                        emri_events_df[idx:] += 1
+                                    else:
+                                        GW_events_df[idx:] += 1
+                                elif type_b >= 10:
+                                    GW_events_df[idx:] += 1
+                                else:
+                                    tde_events_df[idx:] += 1
+                            
+                            # Type a = Star
+                            elif type_b >= 10:  
                                 tde_events_df[idx:] += 1
-                                if max(mass_a, mass_b) > 1e4 | units.MSun:
-                                    tde_smbh_df[idx:] += 1
+                            
+                            else:
+                                ss_events_df[idx:] += 1
                                 
                     coll_events_run.append(coll_events_df)
                     emri_events_run.append(emri_events_df)
                     tde_events_run.append(tde_events_df)
                     tde_smbh_events_run.append(tde_smbh_df)
                     ss_events_run.append(ss_events_df)
+                    
             if len(coll_events_run) > 0:
                 mean_coll = np.mean(coll_events_run, axis=0)
                 IQRH_coll = np.percentile(coll_events_run, 75, axis=0)
@@ -214,6 +272,7 @@ class NCSCPlotter(object):
                 mean_ss = np.mean(ss_events_run, axis=0)
                 IQRH_ss = np.percentile(ss_events_run, 75, axis=0)
                 IQL_ss = np.percentile(ss_events_run, 25, axis=0)
+                
             else:
                 mean_coll = IQRH_coll = IQRL_coll = np.zeros(BIN_RESOLUTION)
                 mean_emri = IQRH_emri = IQL_emri = np.zeros(BIN_RESOLUTION)
@@ -235,6 +294,16 @@ class NCSCPlotter(object):
             fig, ax = plt.subplots(figsize=(8, 6))
             ax.set_xlabel(r"$t$ [kyr]", fontsize=self.AXLABEL_SIZE)
             ax.set_ylabel(r"$N_{\rm coll}$", fontsize=self.AXLABEL_SIZE)
+            
+            vkick = vkick_arr[label%2]
+            msmbh = msmbh_arr[label//2]
+            NTDE = [self.stone_TDE_rate(msmbh, vkick, 10. | units.yr) for time in range(BIN_RESOLUTION)]
+            NTDE_array = [ ]
+            total_TDE = 0
+            for N in NTDE:
+                N /= 0.14
+                NTDE_array.append(N + total_TDE)
+                total_TDE += N
             
             print(f"{config_name[label]}")
             for i in range(len(data_array)):
@@ -272,7 +341,7 @@ class NCSCPlotter(object):
             ax = self.tickers(ax, "plot", True)
             ax.xaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
             ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
-            ax.set_xlim(1.e-3, 10)
+            ax.set_xlim(1.e-3, 20)
             ax.set_ylim(1.e-3, data_array[0][label][1][-1])
             plt.savefig(f"plot/figures/Ncoll_vs_time_{config_name[label]}.pdf", dpi=300, bbox_inches='tight')
             plt.clf()
@@ -285,7 +354,25 @@ class NCSCPlotter(object):
             ax.plot(time_array, data_array[0][label][0], 
                     color=self.colours[label//2],
                     ls=self.ls[label%2],
-                    lw=2)
+                    lw=3)
+            if label == 0 or label == 2:
+                IQRH_smoothed = moving_average(data_array[i][label][1], 30)
+                IQRL_smoothed = moving_average(data_array[i][label][2], 30)
+                time_smoothed = np.linspace(0, 20, len(IQRH_smoothed))
+                
+                ax.plot(time_smoothed, IQRH_smoothed, 
+                        color=self.colours[label//2],
+                        alpha=0.3, lw=1)
+                ax.plot(time_smoothed, IQRL_smoothed, 
+                        color=self.colours[label//2],
+                        alpha=0.3,lw=1)
+                ax.fill_between(
+                    time_smoothed, 
+                    IQRL_smoothed,
+                    IQRH_smoothed, 
+                    color=self.colours[label//2],
+                    alpha=0.3
+                )
         ax.scatter(None, None, color="red", label=r"$M_{\rm SMBH} = 10^{5}$ M$_\odot$")
         ax.scatter(None, None, color="blue", label=r"$M_{\rm SMBH} = 4\times10^{5}$ M$_\odot$")
                     
@@ -293,8 +380,8 @@ class NCSCPlotter(object):
         ax = self.tickers(ax, "plot", True)
         ax.xaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
         ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
-        ax.set_xlim(1.e-3, 10)
-        ax.set_ylim(1.e-3, data_array[0][2][1][-1])
+        ax.set_xlim(1.e-3, 20)
+        ax.set_ylim(1.e-3, 74)#data_array[0][2][1][-1])
         plt.savefig(f"plot/figures/Ncoll_vs_time_all.pdf", dpi=300, bbox_inches='tight')
         plt.clf()
         plt.close()
@@ -309,10 +396,8 @@ class NCSCPlotter(object):
         
         data_configs = [m1e5_300kms, m1e5_600kms, m4e5_300kms, m4e5_600kms]
         config_name = ["1e5_300kms", "1e5_600kms", "4e5_300kms", "4e5_600kms"]
+        levels = [1e-2, 1e-1, 0.5, 0.9]
         
-        sma_arr = [ ]
-        ecc_arr = [ ]
-        inc_arr = [ ]
         for i, IC_params in enumerate(data_configs):
             print(f"Configuration: {config_name[i]}")
             
@@ -321,46 +406,42 @@ class NCSCPlotter(object):
             inc_df = [ ]
             for iter, run in enumerate(IC_params):
                 data_files = natsort.natsorted(glob.glob(f"{run}/*"))
-                particle_set = read_set_from_file(data_files[-1], format="amuse")
-                SMBH = particle_set[particle_set.mass.argmax()]
-                minor = particle_set - SMBH
+                if len(data_files) > 900:
+                    print(f"...Contour for {data_files[-1]}...")
+                    particle_set = read_set_from_file(data_files[-1], format="amuse")
+                    SMBH = particle_set[particle_set.mass.argmax()]
+                    minor = particle_set - SMBH
 
-                lag = LagrangianRadii(particle_set)[-2]
-                for i, p in enumerate(minor):
-                    sys.stdout.write(f"\rProgress: {str(100*i/len(minor))[:5]}%")
-                    sys.stdout.flush()
-                    
-                    rij = p.position - SMBH.position
-                    vij = p.velocity - SMBH.velocity
-                    trajectory = (np.dot(rij, vij))/(rij.length() * vij.length()) 
-                    
-                    bin_sys = Particles()
-                    bin_sys.add_particle(SMBH)
-                    bin_sys.add_particle(p)
-                    
-                    ke = orbital_elements(p, G=constants.G)
-                    sma = ke[2]
-                    ecc = ke[3]
-                    true_anom = ke[4]
-                    inc = ke[5]
-                    arg_periapsis = ke[7]
-                    if trajectory > 0 and rij.length() > 1.5*lag and ecc > 1:
-                        continue
-                    
-                    sma_df.append(np.log10(sma.value_in(units.pc)))
-                    ecc_df.append(ecc)
-                    inc_df.append(inc.value_in(units.degree))
-            sma_arr.append(sma_df)
-            ecc_arr.append(ecc_df)
-            inc_arr.append(inc_df)
+                    lag = LagrangianRadii(particle_set)[-2]
+                    for j, p in enumerate(minor):
+                        sys.stdout.write(f"\rProgress: {str(100*j/len(minor))[:5]}%")
+                        sys.stdout.flush()
+                        
+                        rij = p.position - SMBH.position
+                        vij = p.velocity - SMBH.velocity
+                        trajectory = (np.dot(rij, vij))/(rij.length() * vij.length()) 
+                        
+                        bin_sys = Particles()
+                        bin_sys.add_particle(SMBH)
+                        bin_sys.add_particle(p)
+                        
+                        ke = orbital_elements(bin_sys, G=constants.G)
+                        sma = ke[2]
+                        ecc = ke[3]
+                        true_anom = ke[4]
+                        inc = ke[5]
+                        arg_periapsis = ke[7]
+                        if trajectory > 0 and rij.length() > 1.5*lag and ecc > 1:
+                            continue
+                        
+                        sma_df.append(np.log10(sma.value_in(units.pc)))
+                        ecc_df.append(ecc)
+                        inc_df.append(inc.value_in(units.deg))
         
-        levels = [1e-2, 1e-1, 0.5, 0.9]
-        for label in range(len(config_name)):
-            
-            values = np.vstack([sma_arr, ecc_arr])
-            xx, yy = np.mgrid[-3:2:400j, 0:1:400j]
+            values = np.vstack([sma_df, ecc_df])
+            xx, yy = np.mgrid[-4:0:400j, 0:1:400j]
             positions = np.vstack([xx.ravel(), yy.ravel()])
-            kernel = gaussian_kde(values, bw_method = "silverman")
+            kernel = gaussian_kde(values, bw_method=0.2)
             f = np.reshape(kernel(positions).T, xx.shape)
             f_min, f_max = np.min(f), np.max(f)
             fnorm = (f - f_min) / (f_max - f_min)
@@ -373,15 +454,15 @@ class NCSCPlotter(object):
             cset = ax.contour(xx, yy, fnorm, colors="k", levels=levels, zorder=2)
             
             ax.clabel(cset, inline=1, fontsize=10)
-            ax.set_xlim(-3, 2)
+            ax.set_xlim(-4, 0)
             ax.set_ylim(0, 1)
-            plt.savefig(f"plot/figures/final_contour_sma_ecc_{config_name[label]}.pdf", dpi=300, bbox_inches='tight')
+            plt.savefig(f"plot/figures/final_contour_sma_ecc_{config_name[i]}.pdf", dpi=300, bbox_inches='tight')
             plt.close()
             
-            values = np.vstack([sma_arr, inc_arr])
-            xx, yy = np.mgrid[-3:2:400j, -180:180:400j]
+            values = np.vstack([sma_df, inc_df])
+            xx, yy = np.mgrid[-4:0:400j, -180:180:400j]
             positions = np.vstack([xx.ravel(), yy.ravel()])
-            kernel = gaussian_kde(values, bw_method = "silverman")
+            kernel = gaussian_kde(values, bw_method=0.2)
             f = np.reshape(kernel(positions).T, xx.shape)
             f_min, f_max = np.min(f), np.max(f)
             fnorm = (f - f_min) / (f_max - f_min)
@@ -394,46 +475,39 @@ class NCSCPlotter(object):
             cset = ax.contour(xx, yy, fnorm, colors="k", levels=levels, zorder=2)
             
             ax.clabel(cset, inline=1, fontsize=10)
-            ax.set_xlim(-3, 2)
+            ax.set_xlim(-4, 0)
             ax.set_ylim(-180, 180)
-            plt.savefig(f"plot/figures/final_contour_sma_inc_{config_name[label]}.pdf", dpi=300, bbox_inches='tight')
+            plt.savefig(f"plot/figures/final_contour_sma_inc_{config_name[i]}.pdf", dpi=300, bbox_inches='tight')
             plt.close()
     
     def plot_cluster_initial(self):
         """Plot the system in x, y coordinates"""
-        initial_bodies = read_set_from_file("data/600kms_m4e5/Nimbh0_RA_BH_Run/init_snapshot/config_0_bound.hdf5", "hdf5")
+        initial_bodies = read_set_from_file("/media/erwanh/Elements/BH_Post_Kick/600kms_m1e5/Nimbh0_RA_BH_Run/init_snapshot/config_1_bound.hdf5", "hdf5")
         initial_bodies.position -= initial_bodies[initial_bodies.mass.argmax()].position
         
-        levels = [1e-2, 1e-1, 0.5, 0.999]
+        levels = [1e-2, 1e-1, 0.5]
         values = np.vstack([initial_bodies.x.value_in(units.pc), 
                             initial_bodies.y.value_in(units.pc)])
-        xx, yy = np.mgrid[-0.1:0.1:500j, -0.1:0.1:500j]
+        xx, yy = np.mgrid[-0.044:0.044:500j, -0.044:0.044:500j]
         positions = np.vstack([xx.ravel(), yy.ravel()])
-        kernel = gaussian_kde(values, bw_method=0.04)
+        kernel = gaussian_kde(values, bw_method="silverman")#, bw_method=0.)
         f = np.reshape(kernel(positions).T, xx.shape)
+        f_min, f_max = np.min(f), np.max(f)
+        fnorm = (f - f_min) / (f_max - f_min)
+        
 
         fig, ax = plt.subplots(figsize=(6, 6))
         ax.set_aspect('equal')
         self.tickers(ax, "plot", False)
-        ax.set_xlim(-0.1, 0.1)
-        ax.set_ylim(-0.1, 0.1)
+        ax.set_xlim(-0.044, 0.044)
+        ax.set_ylim(-0.044, 0.044)
         ax.set_xlabel(r"$x$ [pc]", fontsize=self.AXLABEL_SIZE)
         ax.set_ylabel(r"$y$ [pc]", fontsize=self.AXLABEL_SIZE)
 
-        cset = ax.contour(xx, yy, f, colors="k", levels=levels, zorder=1)
+        cset = ax.contour(xx, yy, fnorm, colors="k", levels=levels, zorder=1)
         ax.scatter(initial_bodies[initial_bodies.mass.argmax()].x.value_in(units.pc), 
                     initial_bodies[initial_bodies.mass.argmax()].y.value_in(units.pc), 
                     color="black", s=5, zorder=3)
-
-        ax.arrow(-0.6, 0.53, 0.2, 0., lw=5, head_width=0.03, fill=True, 
-                    facecolor="black", zorder=3)
-        text = ax.text(-0.5, 0.6, r"$v_{\rm kick}$", 
-                        horizontalalignment="center", 
-                        fontsize=self.AXLABEL_SIZE+10)
-        text.set_path_effects([
-            path_effects.Stroke(linewidth=5, foreground='white'),
-            path_effects.Normal()
-        ])
 
         fname = "plot/figures/HCSC_system_plot.png"
         plt.savefig(fname, dpi=250, bbox_inches='tight')
@@ -479,7 +553,7 @@ class NCSCPlotter(object):
             final_sma.append(final_sma_df)
         
         m1e5_300kms_snaps = self.extract_folder("1e5", 300, "simulation_snapshot")
-        m4e5_300kms_snaps = self.extract_folder("4e5", 600, "simulation_snapshot")
+        m4e5_300kms_snaps = self.extract_folder("4e5", 300, "simulation_snapshot")
         snap_data_configs = [m1e5_300kms_snaps, m4e5_300kms_snaps] 
         
         all_sma_init = [ ]
@@ -547,7 +621,7 @@ class NCSCPlotter(object):
         min_sma = min(min(all_sma_init[0]), min(all_sma_init[1]))
         min_ecc = min(min(all_ecc_init[0]), min(all_ecc_init[1]))
         
-        labs = ["m1e5_300", "m4e5_600"]
+        labs = ["m1e5_300", "m4e5_300"]
         smbh_masses = [1e5, 4e5] | units.MSun
         for data in range(2):
             values = np.vstack([all_sma_init[data], all_ecc_init[data]])
@@ -565,7 +639,7 @@ class NCSCPlotter(object):
             fig, ax = plt.subplots(figsize=(6, 6))
             self.tickers(ax, "plot", False)
             ax.set_xlim(min_sma-0.3, 1)
-            ax.set_ylim(min_ecc-0.3, 0)
+            ax.set_ylim(-4, 0)
             ax.set_xlabel(r"$\log_{10}a$ [pc]", fontsize=self.AXLABEL_SIZE)
             ax.set_ylabel(r"$\log_{10}(1-e)$", fontsize=self.AXLABEL_SIZE)
             ax.contourf(xx, yy, fnorm, cmap="Blues", levels=levels, zorder=1, extend="max")
@@ -594,6 +668,6 @@ class NCSCPlotter(object):
         
 plot = NCSCPlotter()
 plot.plot_GW_vs_time()
-plot.plot_cluster_initial()
-plot.plot_cluster_evolution()
-plot.sma_ecc_traj_colls()
+#plot.plot_cluster_initial()
+#plot.plot_cluster_evolution()
+#plot.sma_ecc_traj_colls()

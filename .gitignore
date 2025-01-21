@@ -10,3 +10,5 @@ plot/figures/
 binev.data
 data/__pycache__
 test.py
+final_figures/
+figures*
