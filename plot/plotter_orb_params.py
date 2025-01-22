@@ -12,6 +12,7 @@ import sys
 from scipy.stats import gaussian_kde
 
 from amuse.ext.orbital_elements import orbital_elements
+from amuse.ext.LagrangianRadii import LagrangianRadii
 from amuse.io.base import read_set_from_file
 from amuse.lab import constants, Particles, units
 
@@ -569,8 +570,6 @@ for i, data_file in enumerate(files):
 
 chosen_file = 1
 change_orb_params(files[chosen_file], vkick=300|units.kms)
-
-STOP
     
 ignored_idx = [2, 4, 6, 8, 10, 14, 16, 
                18, 20, 22, 26, 28, 30, 
@@ -590,6 +589,9 @@ bound_inc_arr = [[ ] for i in range(len(files))]
 bound_true_anom_arr = [[ ] for i in range(len(files))]
 bound_arg_peri_arr = [[ ] for i in range(len(files))]
 bound_sep_arr = [[ ] for i in range(len(files))]
+bound_rh_arr = [[ ] for i in range(len(files))]
+bound_vdisp_arr = [[ ] for i in range(len(files))]
+
 tGW_time_arr = [[ ] for i in range(len(files))]
 labels = [ ]
 for i, data_file in enumerate(files):
@@ -612,6 +614,7 @@ for i, data_file in enumerate(files):
     particles.position -= SMBH.position
     particles.velocity -= SMBH.velocity
     
+    bounded_pop = Particles()
     for iter, p in enumerate(minor_bodies):
         sys.stdout.write(f"\rProgress: {str(100*iter/len(minor_bodies))[:5]}%")
         sys.stdout.flush()
@@ -628,6 +631,8 @@ for i, data_file in enumerate(files):
         arg_periapsis = ke[7]
         
         if ecc < 1:
+            bounded_pop.add_particle(p)
+            
             dist = (p.position - SMBH.position).length()
             bound_sep_arr[i].append(np.log10(dist.value_in(units.pc)))
             bound_ecc_arr[i].append(ecc)
@@ -646,7 +651,19 @@ for i, data_file in enumerate(files):
                               p.velocity.length())
             tGW_time_arr[i].append(tGW)
     
+    rlag = LagrangianRadii(bounded_pop)[6].value_in(units.pc)
+    vdisp = np.std(bounded_pop.velocity.lengths().in_(units.kms))
+    
+    bound_rh_arr[i].append(rlag)
+    bound_vdisp_arr[i].append(vdisp)
+    
     print(labels[i], "# data", len(bound_ecc_arr[i]))
+
+for i, label in enumerate(labels):
+    print(f"Label: {label}")
+    print(f"Mean rHalf: {np.mean(bound_rh_arr[i])}, Median rHalf: {np.median(bound_rh_arr[i])}")
+    print(f"Mean vDisp: {np.mean(bound_vdisp_arr[i])}, Median vDisp: {np.median(bound_vdisp_arr[i])}")
+STOP
 
 data_arr = [bound_ecc_arr, 
             bound_sma_arr, 

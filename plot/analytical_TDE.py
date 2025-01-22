@@ -1,0 +1,118 @@
+from amuse.lab import units, constants
+import numpy as np
+
+def sphere_of_influence(SMBH_mass):
+    """Extract sphere of influence"""
+    vdisp = 200. * (SMBH_mass/(1.66 * 10**8 | units.MSun))**(1/4.86) | units.kms
+    rinfl = constants.G*SMBH_mass/vdisp**2
+    return rinfl
+
+def cluster_mass(SMBH_mass, vkick):
+    """Extract HCSC mass"""
+    rinfl = sphere_of_influence(SMBH_mass)
+    mcluster = 11.6*GAMMA**-1.75 * SMBH_mass \
+                * (constants.G*SMBH_mass/(rinfl*vkick**2.))**(3. - GAMMA)
+    return mcluster
+
+def tidal_radius(SMBH_mass):
+    """Extract tidal radius"""
+    rstar = (AVG_STELLAR_MASS.value_in(units.MSun)) ** 0.8
+    rtide = rstar*(0.844*SMBH_mass/(AVG_STELLAR_MASS))**(1./3.) | units.RSun
+    return rtide
+
+def stone_2017(SMBH_mass, vdisp, vkick, rcluster):
+    stellar_tide = tidal_radius(SMBH_mass)
+    mcluster = cluster_mass(SMBH_mass, vkick)
+    
+    number_density = mcluster/(4./3.*np.pi*rcluster**3.) * 1/(AVG_STELLAR_MASS)
+    cross_section = np.pi*stellar_tide**2.*(1.+2.*constants.G*SMBH_mass/(stellar_tide*vdisp**2.))
+    TDE_rate = number_density*cross_section*vdisp
+    print(f"Stone 2017 TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, vkick = {vkick.in_(units.kms)}, {TDE_rate.in_(1/units.kyr)}")
+
+def rizzuto_2023(SMBH_mass, vdisp, vkick, rcluster):
+    mcluster = cluster_mass(SMBH_mass, vkick)
+    fbound = 1  # Fraction of stars within the sphere of influence bound to SMBH (here rHCSC)
+    density = mcluster/(4./3.*np.pi*rcluster**3.)
+    
+    TDE_rate = 1.1*0.8*fbound * np.log(0.22*SMBH_mass/AVG_STELLAR_MASS) \
+                * (SMBH_mass/(10**3 | units.MSun)) * (density/(10**7 | units.MSun/units.pc**3)) \
+                    * (vdisp/(100 | units.kms))**-3 | units.Myr**-1
+    print(f"Rizzuto et al. 2023 TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, vkick = {vkick.in_(units.kms)}, {TDE_rate.in_(1/units.kyr)}")
+
+def komossa_2008(SMBH_mass, vdisp, vkick, rcluster):
+    stellar_tide = tidal_radius(SMBH_mass)
+    RCLUSTER = constants.G*SMBH_mass/vkick**2
+    fbound = cluster_mass(SMBH_mass, vkick) / SMBH_mass
+    mcluster = cluster_mass(SMBH_mass, vkick)
+    C_RR = 0.14  # NEED BETTER VALUE --> order of magnitude off when we base off Stone
+    lnL = np.log(SMBH_mass/AVG_STELLAR_MASS)
+    lnR = np.log(RCLUSTER/stellar_tide)
+    
+    TDE_rate = C_RR * lnL/lnR * (vkick/RCLUSTER) * fbound
+    print(f"Komossa & Merritt 2008 TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, vkick = {vkick.in_(units.kms)}, {TDE_rate.in_(1/units.kyr)}")
+    TDE_rate = 6.5*10**-3 * (SMBH_mass/(10**7 | units.MSun))**-1 * (vkick/(1000|units.kms))**3 * (fbound/10**-3) | units.kyr**-1
+    print(f"Komossa & Merritt 2008 TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, vkick = {vkick.in_(units.kms)}, {TDE_rate.in_(1/units.kyr)}")
+    
+    N = cluster_mass(SMBH_mass, vkick)/AVG_STELLAR_MASS
+    TDE_rate = np.pi/np.sqrt(2) * N*constants.G**2 \
+                * AVG_STELLAR_MASS * lnL/(vdisp**3 * lnR) \
+                   * (SMBH_mass+mcluster)/(4/3 * np.pi * rcluster**3)
+    TDE_rate *= SMBH_mass/(N*AVG_STELLAR_MASS)
+    print(f"Modified Komossa & Merritt 2008 TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, vkick = {vkick.in_(units.kms)}, {TDE_rate.in_(1/units.kyr)}")
+    
+    N = cluster_mass(SMBH_mass, vkick)/AVG_STELLAR_MASS
+    fbound = cluster_mass(SMBH_mass, vkick) / SMBH_mass
+    volume = 4/3 * np.pi * rcluster**3
+    TDE_rate = N/(lnR * fbound) * (np.pi * constants.G**2 * AVG_STELLAR_MASS * mcluster * lnL)/(np.sqrt(2) *vdisp**3 * volume)
+    TDE_rate *= SMBH_mass/(N*AVG_STELLAR_MASS)
+    print(f"Modified Komossa & Merritt 2008 TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, vkick = {vkick.in_(units.kms)}, {TDE_rate.in_(1/units.kyr)}")
+    
+    density = 2.6e7 | units.MSun/units.pc**3  # Schodel (2018) from MW
+    unbound_rate = 2*np.pi*constants.G*SMBH_mass*(density/AVG_STELLAR_MASS) * vkick**-1 * stellar_tide
+    print(f"Unbound rate: MSMBH = {SMBH_mass.in_(units.MSun)}, vkick = {vkick.in_(units.kms)}, {unbound_rate.in_(1/units.kyr)}")
+    
+def wang_2004(SMBH_mass):
+    """Extract TDE rate for NSC (unrecoiled)"""
+    alpha = (27-19*GAMMA)/(6*(4-GAMMA))
+    vdisp = 200 * (SMBH_mass/(1.66 * 10**8 | units.MSun))**(1/4.86) | units.kms
+    TDE_rate = 7.1*10**-1*(vdisp/(70 | units.kms))**3.5*(SMBH_mass/(10**6 | units.MSun))**-alpha | units.kyr**-1
+    print(f"Wang 2004 TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, {TDE_rate.in_(1/units.kyr)}")
+
+AVG_STELLAR_MASS = 3.07 | units.MSun
+GAMMA = 1.75
+
+# MSMBH =  1e5,    4e5,   1e5,   4e5
+# vKICK =  300,    300,   600,   600
+# vdisp =  180,    190,   300,   330    BASED ON PLOTS OF LONG-TERM
+# rclus = 0.02,  0.045,  0.01,  0.02  BASED ON PLOTS OF LONG-TERM
+
+#                    MSMBH,          vkick,            vdisp,          rcluster
+configs = {
+    "Model_A": [1e5 | units.MSun, 300 | units.kms, 180 | units.kms, 0.0157 | units.pc],
+    "Model_B": [4e5 | units.MSun, 300 | units.kms, 190 | units.kms, 0.0449 | units.pc],
+    "Model_C": [1e5 | units.MSun, 600 | units.kms, 300 | units.kms, 0.0074 | units.pc],
+    "Model_D": [4e5 | units.MSun, 600 | units.kms, 330 | units.kms, 0.0193 | units.pc]
+}
+
+    
+    
+model_choice = "Model_D"    
+rcluster = constants.G * configs[model_choice][0] / configs[model_choice][2]**2
+ratio_r = rcluster/configs[model_choice][-1]  # Merritt / Us
+ratio_v = configs[model_choice][1] / configs[model_choice][2]   # Merritt / Us
+prop = ratio_r**2.5*ratio_v**-2
+print("Merritt-to-us-ratio: ", prop)
+
+stone_2017(SMBH_mass=configs[model_choice][0],
+           vdisp=configs[model_choice][2],
+           vkick=configs[model_choice][1],
+           rcluster=configs[model_choice][3])
+rizzuto_2023(SMBH_mass=configs[model_choice][0],
+           vdisp=configs[model_choice][2],
+           vkick=configs[model_choice][1],
+           rcluster=configs[model_choice][3])
+komossa_2008(SMBH_mass=configs[model_choice][0],
+             vdisp=configs[model_choice][2],
+             vkick=configs[model_choice][1],
+             rcluster=configs[model_choice][3])
+wang_2004(SMBH_mass=1e5 | units.MSun)
