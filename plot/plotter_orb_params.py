@@ -569,7 +569,7 @@ for i, data_file in enumerate(files):
     print(f"I.C #{i}: {data_file}")
 
 chosen_file = 1
-change_orb_params(files[chosen_file], vkick=300|units.kms)
+#change_orb_params(files[chosen_file], vkick=300|units.kms)
     
 ignored_idx = [2, 4, 6, 8, 10, 14, 16, 
                18, 20, 22, 26, 28, 30, 
@@ -594,8 +594,13 @@ bound_vdisp_arr = [[ ] for i in range(len(files))]
 
 tGW_time_arr = [[ ] for i in range(len(files))]
 labels = [ ]
+
 for i, data_file in enumerate(files):
-    particles = read_set_from_file(data_file, "hdf5")
+    if i == 0 or i == 1 or i == 7 or i == 8 or i == 14 or i == 15 or i == 21 or i == 22:
+        particles = read_set_from_file(data_file, "hdf5")[:500]
+    else:
+        particles = read_set_from_file(data_file, "hdf5")
+    
     SMBH = particles[particles.mass.argmax()]
     minor_bodies = particles - SMBH
     print(f"\nProcessing: {data_file}", end=", ")
@@ -606,6 +611,7 @@ for i, data_file in enumerate(files):
         mass_parameter = "4e"+str(np.log10(SMBH.mass.value_in(units.MSun)/4))
     else:
         mass_parameter = "1e"+str(np.log10(SMBH.mass.value_in(units.MSun)))
+        
     kick_parameter = kick_params[i%len(kick_params)]
     gamma_parameter = str(data_file.split("_Gamma")[-1])
     gamma_parameter = str(gamma_parameter.split("/")[0])
@@ -613,6 +619,9 @@ for i, data_file in enumerate(files):
     labels.append(f"M{mass_parameter}MSun_V{kick_parameter}kms_{gamma_parameter}")
     particles.position -= SMBH.position
     particles.velocity -= SMBH.velocity
+    
+    rkick = constants.G * SMBH.mass / (kick_parameter | units.kms)**2
+    distances = minor_bodies.position.lengths()
     
     bounded_pop = Particles()
     for iter, p in enumerate(minor_bodies):
@@ -662,6 +671,7 @@ for i, data_file in enumerate(files):
 for i, label in enumerate(labels):
     print(f"Label: {label}")
     print(f"Mean rHalf: {np.mean(bound_rh_arr[i])}, Median rHalf: {np.median(bound_rh_arr[i])}")
+    print(f"Mean SMA: {np.mean(bound_sma_arr[i])}, Median SMA: {np.median(bound_sma_arr[i])}")
     print(f"Mean vDisp: {np.mean(bound_vdisp_arr[i])}, Median vDisp: {np.median(bound_vdisp_arr[i])}")
 STOP
 

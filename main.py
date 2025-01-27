@@ -52,24 +52,24 @@ def run_code(file, eta, tend, config, run_no):
     output_dir = config.split("config")[0]
     code_conv = nbody_system.nbody_to_si(pset.mass.sum(), 1 | units.pc)
     evolve_system = EvolveSystem(pset, tend, eta, code_conv, SMBH,
-                                 no_worker=15, dir_path=output_dir,
+                                 no_worker=14, dir_path=output_dir,
                                  fname=fname, no_files=no_files)
     evolve_system.initialise_code()
     evolve_system.run_code()
 
 
-vkick = "300"
-mSMBH = "1e5"
+vkick = "600"
+mSMBH = "4e5"
 Nimbh = 0
-run_no = 0
-suffix = "all"
+run_no = 3
+suffix = "bound"
 
 data_config = f"data/{vkick}kms_m{mSMBH}/Nimbh{Nimbh}_RA_BH_Run"
 output_dir = f"{data_config}/config_{run_no}"
 data_file = f"{data_config}/init_snapshot/config_{run_no}_{suffix}.hdf5"
 
 eta = 1e-2
-tend = 100 | units.kyr
+tend = 50 | units.kyr
 
 run_code(file=data_file, 
          eta=eta, 

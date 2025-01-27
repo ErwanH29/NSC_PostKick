@@ -10,6 +10,7 @@ def sphere_of_influence(SMBH_mass):
 def cluster_mass(SMBH_mass, vkick):
     """Extract HCSC mass"""
     rinfl = sphere_of_influence(SMBH_mass)
+    #rinfl = 35 * (SMBH_mass/(10**8 | units.MSun))**(0.56) | units.pc
     mcluster = 11.6*GAMMA**-1.75 * SMBH_mass \
                 * (constants.G*SMBH_mass/(rinfl*vkick**2.))**(3. - GAMMA)
     return mcluster
@@ -92,11 +93,9 @@ configs = {
     "Model_B": [4e5 | units.MSun, 300 | units.kms, 190 | units.kms, 0.0449 | units.pc],
     "Model_C": [1e5 | units.MSun, 600 | units.kms, 300 | units.kms, 0.0074 | units.pc],
     "Model_D": [4e5 | units.MSun, 600 | units.kms, 330 | units.kms, 0.0193 | units.pc]
-}
+}    
 
-    
-    
-model_choice = "Model_D"    
+model_choice = "Model_B"    
 rcluster = constants.G * configs[model_choice][0] / configs[model_choice][2]**2
 ratio_r = rcluster/configs[model_choice][-1]  # Merritt / Us
 ratio_v = configs[model_choice][1] / configs[model_choice][2]   # Merritt / Us
@@ -115,4 +114,4 @@ komossa_2008(SMBH_mass=configs[model_choice][0],
              vdisp=configs[model_choice][2],
              vkick=configs[model_choice][1],
              rcluster=configs[model_choice][3])
-wang_2004(SMBH_mass=1e5 | units.MSun)
+wang_2004(SMBH_mass=configs[model_choice][0])
