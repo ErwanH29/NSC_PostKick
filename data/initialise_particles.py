@@ -19,7 +19,7 @@ def run_code(vkick, nimbh):
     
     vdisp = 200 * (SMBH_MASS/(1.66*10**8 | units.MSun))**(1/4.86) | units.kms
     sphere_of_influence = constants.G*SMBH_MASS/vdisp**2
-    rvir = 0.1*sphere_of_influence # (2*constants.G*SMBH_MASS)/(3*np.pi*vdisp**2)
+    rvir = (2*constants.G*SMBH_MASS)/(3*np.pi*vdisp**2)
     
     if SMBH_MASS < 1e6 | units.MSun:
         rcrop = 2*10**-4 * sphere_of_influence
@@ -150,7 +150,7 @@ def run_code(vkick, nimbh):
                     f.write('\n')
 
 TARGET_NSIMS = 10
-SMBH_MASS = 4e5 | units.MSun 
+SMBH_MASS = 1e5 | units.MSun 
 TOTAL_IMBH_MASS = 4000 | units.MSun
 vkick = [150, 300, 600, 1200] | units.kms
-run_code(vkick=600|units.kms, nimbh=0)
+run_code(vkick=1200|units.kms, nimbh=0)

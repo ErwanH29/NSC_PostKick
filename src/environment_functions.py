@@ -60,12 +60,14 @@ def handle_coll(parti, parti_in_enc, tcoll, dir_path, stellar_type):
     new_particle.position = com_pos
     new_particle.velocity = com_vel
     new_particle.coll_events = (p1.coll_events + p2.coll_events) + 1
-    if max(parti_in_enc.stellar_type) > 13 | units.stellar_type:
+    
+    if max(stellar_type) > 13 | units.stellar_type:
        new_particle.radius = (6.*constants.G*new_particle.mass)/(constants.c**2.)
-    elif max(parti_in_enc.stellar_type) > 10 | units.stellar_type:
+    elif max(stellar_type) > 10 | units.stellar_type:
        new_particle.radius = max(parti_in_enc.radius)
     else:
        new_particle.radius = ZAMS_radius(new_particle.mass)
+       
     new_particle.stellar_type = max(stellar_type)
     parti.add_particles(new_particle)
     parti.remove_particles(parti_in_enc)

@@ -48,7 +48,7 @@ class ClusterInitialise(object):
             particles (object):  Particle set
         """
         SMBH_parti = MW_SMBH(mass)
-        nStar = 120000
+        nStar = 25000
         print(f"#Stars ={nStar}")
 
         particles = Particles(1)
@@ -75,20 +75,20 @@ class ClusterInitialise(object):
                                 mass=cluster_mass.value_in(units.MSun))
         bh_pot = agama.Potential(type='plummer', 
                                  mass=SMBH_parti.mass.value_in(units.MSun), 
-                                 scaleRadius=0)
+                                 scaleRadius=SMBH_parti.bh_rad.value_in(units.pc))
         total_pot = agama.Potential(c_pot, bh_pot)
         c_df = agama.DistributionFunction(type='quasispherical', potential=total_pot)
-        c_gm = agama.GalaxyModel(c_pot, c_df)
+        c_gm = agama.GalaxyModel(total_pot, c_df)
+        xv, _ = c_gm.sample(nStar)
         
-        xv, mass = c_gm.sample(nStar)
         stars.position = xv[:,:3] | units.pc
         stars.velocity = xv[:,3:] | units.kms
         stars -= stars[stars.position.lengths() < rcavity]
-        #stars.mass = mass | units.MSun
+        
         particles.add_particles(stars)
         
         particles.Nej = 0
         particles.coll_events = 0
-        print(f"TOTAL PARTICLES: {len(particles)}")
+        print(f"Trimmed off: {nStar - len(particles)}")
         
         return particles

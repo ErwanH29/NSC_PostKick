@@ -56,7 +56,7 @@ class EvolveSystem(object):
         self.particles = self.init_pset
         self.grav_code = Ph4(self.conv, number_of_workers=self.no_workers)
         self.grav_code.particles.add_particles(self.particles)
-        self.grav_code.parameters.timestep_parameter = 2**-3
+        self.grav_code.parameters.timestep_parameter = 0.1
 
         self.grav_stopping = self.grav_code.stopping_conditions.collision_detection
         self.grav_stopping.enable()
@@ -86,11 +86,12 @@ class EvolveSystem(object):
 
     def process_merger(self, enc_particles_set, stellar_type_array):
         filename = "merger_"+str(np.sum(self.particles.coll_events))+".amuse"
-        merge_file = os.path.join(self.dpath, "merge_snapshots",
-                                  self.fname, filename)
+        merge_file = os.path.join(self.dpath, "merge_snapshots", self.fname, filename)
         write_set_to_file(
-            self.particles, merge_file, 'hdf5',
-            close_file=True, overwrite_file=True
+            self.particles, 
+            merge_file, 'hdf5',
+            close_file=True, 
+            overwrite_file=True
         )
 
         newp = handle_coll(self.particles, 
@@ -104,7 +105,6 @@ class EvolveSystem(object):
         """Check and resolve mergers"""
         for ci in range(len(self.grav_stopping.particles(0))):                
             self.chnl_from_grav.copy()
-            
             
             colliders = self.grav_code.stopping_conditions.collision_detection.particles
             enc_particles_set = Particles(particles=[colliders(0), colliders(1)])
@@ -125,12 +125,12 @@ class EvolveSystem(object):
                     self.stellar_code.particles.remove_particle(enc_particles_set[1])
                     self.stellar_code.particles.add_particle(newp)
 
-                    newp.radius = newp.as_particle_in_set(self.stellar_code.particles).radius
+                    newp.radius = self.stellar_code.particles[-1].radius
                     newp.radius = stellar_tidal_radius(newp, self.particles.mass.max())
                     self.particles.synchronize_to(self.grav_code.particles)
 
             else:
-                print("TDE event")         
+                print("Compact Object event")         
                 
                 SMBH = self.particles[self.particles.mass.argmax()]
                 # If not SMBH (with tolerance) and at least one star --> Star - Compact Object collision
@@ -155,8 +155,7 @@ class EvolveSystem(object):
 
                         self.particles.synchronize_to(self.grav_code.particles)
 
-                else:
-                    print("GW Event")
+                else:  # Either SMBH TDE, or GW event so no radius change needed
                     newp = self.process_merger(enc_particles_set, stellar_type_arr)
                     coll_a = enc_particles_set[0].as_particle_in_set(self.stellar_code.particles)
                     coll_b = enc_particles_set[1].as_particle_in_set(self.stellar_code.particles)
@@ -168,12 +167,16 @@ class EvolveSystem(object):
                     self.particles.synchronize_to(self.grav_code.particles)
 
     def run_code(self):
+        
         filename = f"snapshot_step_{self.siter}.amuse"
         snap_file = os.path.join(self.dpath, "simulation_snapshot", 
                                  self.fname, filename)
-        
-        write_set_to_file(self.particles, snap_file, 'hdf5',
-                          close_file=True, overwrite_file=True)
+        write_set_to_file(
+            self.particles, 
+            snap_file, 'hdf5',
+            close_file=True, 
+            overwrite_file=True
+        )
         
         while (self.time < self.tend):
             self.siter += 1
@@ -205,7 +208,6 @@ class EvolveSystem(object):
                         self.stars, 
                         self.grav_code
                     )
-            
             
             snap_file = os.path.join(self.dpath, "simulation_snapshot", self.fname, 
                                      f"snapshot_step_{self.siter}.amuse")
