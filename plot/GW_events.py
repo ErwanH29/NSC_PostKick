@@ -219,7 +219,6 @@ class NCSCPlotter(object):
             "WD-WD": []
         }
         
-        N=0
         for run in m4e5_300kms_colls:
             data_files = natsort.natsorted(glob.glob(f"{run}/*"))
             for file in data_files:
@@ -233,15 +232,15 @@ class NCSCPlotter(object):
                     if type_a > 10 and type_b > 10:
                         sma = float(lines[6].split(": ")[1][:-3]) | units.au
                         ecc = float(lines[7].split(": ")[1])
-                        print(lines[6], sma)
                         
-                        if ecc < 1:
-                            if type_a == 14 and type_b == 14:
-                                if max(mass_a/mass_b, mass_b/mass_a) > 10**3:
-                                    sma_array["EMRI"].append(sma)
-                                    ecc_array["EMRI"].append(ecc)
-                                    mass_array["EMRI"].append([mass_a, mass_b])
-                                else:
+                        if abs(ecc) < 1:    
+                            print(max(mass_a, mass_b))
+                            if max(mass_a, mass_b) > 1e4 | units.MSun:
+                                sma_array["EMRI"].append(sma)
+                                ecc_array["EMRI"].append(ecc)
+                                mass_array["EMRI"].append([mass_a, mass_b])
+                                
+                            elif type_a == 14 and type_b == 14:
                                     sma_array["BH-BH"].append(sma)
                                     ecc_array["BH-BH"].append(ecc)
                                     mass_array["BH-BH"].append([mass_a, mass_b])
@@ -303,9 +302,10 @@ class NCSCPlotter(object):
             x = np.log10(freq_array[key])
             y = np.log10(strain_array[key])
             c = self.cmap_colours[i]
+            c = "black"
             if len(x) > 0:
-                ax.scatter(x, y, color=c, s=15)
-                ax.scatter(None, None, color=c, label=key)
+                ax.scatter(x, y, color=c, s=5)
+                #ax.scatter(None, None, color=c, label=key)
                 if np.sum(np.isclose(x.imag, 0)) > 10:
                     KDE_x, KDE_y = self.KDE_plotter([x,y])
                     
@@ -319,14 +319,14 @@ class NCSCPlotter(object):
         ax.set_ylim(-31, -17)
         ax1.set_ylim(0.01, 1.04)
         ax2.set_xlim(0.01, 1.04)
-        ax.legend(
+        """ax.legend(
             fontsize=13, 
             bbox_to_anchor=(1.35,1.5), 
             ncol=1, frameon=False,
             borderaxespad=0.2, 
             handlelength=0.88,
             columnspacing=0.75
-        )
+        )"""
         ax.set_xlabel(r"$\log_{10}f$ [Hz]", fontsize=self.TICK_SIZE)
         ax.set_ylabel(r"$\log_{10}h$", fontsize=self.TICK_SIZE)
         ax1.set_ylabel(r'$\rho/\rho_{\rm{max}}$', fontsize=self.TICK_SIZE)

@@ -125,3 +125,57 @@ def stellar_tidal_radius(stars, SMBH_mass):
     """
     r_zams = stars.radius * (0.844**2 * SMBH_mass/stars.mass)**(1./3.)
     return r_zams
+  
+def GW_event_kick(particles, spin_a=None, spin_b=None):
+    """
+    Apply recoil kick (Lousto et al. 2012)
+    
+    Args:
+      particles (object):  Encountering particles
+      spin_a (list):  Spin of particle A [Parallel, Perpendicular]
+      spin_b (list):  Spin of particle B [Parallel, Perpendicular]
+    
+    Returns:
+      kick (float):  Kick velocity
+    """
+    ### Constants:  González et al. 2007; Lousto & Zlochower 2008
+    A = 1.2e4 | units.kms
+    H = 6.9e3 | units.kms
+    B = -0.93
+    zeta = 2.53073  # Radian
+    
+    ### Constants: Lousto et al. 2012
+    va1 = 3678 | units.kms
+    va = 2481 | units.kms
+    vb = 1793 | units.kms
+    vc = 1507 | units.kms
+    
+    ke = orbital_elements_from_binary(particles, G=constants.G)
+    ecc = ke[3]%1.
+    
+    if not (spin_a):
+        spin_a = [0, 0]  #  Parallel, Perpendicular
+    if not (spin_b):
+        spin_b = [0, 0]  #  Parallel, Perpendicular
+      
+    rij = (particles[0].position - particles[1].position).value_in(units.m)
+    vij = (particles[0].velocity - particles[1].velocity).value_in(units.ms)
+    ang_mom = np.cross(rij, vij)
+    
+    ecc_par = ang_mom / np.linalg.norm(ang_mom)
+    ecc_perp = np.cross(rij, ecc_par)
+    ecc_perp /= np.linalg.norm(ecc_perp)
+    
+    q = min(particles.mass)/max(particles.mass)
+    eta = q / (1. + q)**2.
+    
+    vm = A * eta**2 * np.sqrt(1. - 4.*eta) * (1.+ B*eta)
+    vperp = H * eta**2 / (1 + q) * (spin_b[0] - q*spin_a[0])
+    eff_spin = 2 * (spin_b[0] + q**2 * spin_a[0]) / (1+q)**2
+    
+    #vpara_a = 16 * eta**2 / (1+q) * (va1 + va*eff_spin + vb*eff_spin**2 + vc*eff_spin**3)
+    #vpara_b = abs(spin_b[0] - q*spin_a[0])*np.cos(phi_delta - phi_a)
+    #vpara = np.cross(vpara_a, vpara_b)
+    
+    vkick = (1. + ecc) * (vm * ecc_perp + vperp * (np.cos(zeta * ecc_perp) + np.sin(zeta * ecc_perp)) ) # + vpara*ecc_par)
+    return vkick

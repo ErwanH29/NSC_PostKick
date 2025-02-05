@@ -27,7 +27,7 @@ def sort_files(path):
     sorted_files = sorted(glob.glob(path+"/*"), key=lambda x: [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', str(x))])
     return sorted_files
 
-def run_code(file, eta, tend, config, run_no):
+def run_code(file, eta, tend, config, run_no, resume):
     """
     Function to run the code.
     
@@ -37,13 +37,13 @@ def run_code(file, eta, tend, config, run_no):
         tend (Float):  Maximum simulation time
         config (String):  Configuration simulating
         run_no (Int):  Run number
+        resume (Bool):  Resume simulation
     """
     no_files = 0
 
     pset = read_set_from_file(file, "hdf5")
     SMBH = pset[pset.mass.argmax()]
     SMBH.stellar_type = 14 | units.stellar_type
-    
     compact_objects = pset.stellar_type > 13 | units.stellar_type
     pset[compact_objects].radius = 3*(2*constants.G*pset[compact_objects].mass)/(constants.c**2)
     pset[~compact_objects].radius = stellar_tidal_radius(pset[~compact_objects], SMBH.mass)
@@ -52,27 +52,29 @@ def run_code(file, eta, tend, config, run_no):
     output_dir = config.split("config")[0]
     code_conv = nbody_system.nbody_to_si(pset.mass.sum(), 1 | units.pc)
     evolve_system = EvolveSystem(pset, tend, eta, code_conv, SMBH,
-                                 no_worker=14, dir_path=output_dir,
-                                 fname=fname, no_files=no_files)
+                                 no_worker=1, dir_path=output_dir,
+                                 fname=fname, no_files=no_files,
+                                 resume=resume)
     evolve_system.initialise_code()
     evolve_system.run_code()
 
 
-vkick = "600"
+vkick = "300"
 mSMBH = "4e5"
 Nimbh = 0
-run_no = 3
+run_no = 4
 suffix = "bound"
 
 data_config = f"data/{vkick}kms_m{mSMBH}/Nimbh{Nimbh}_RA_BH_Run"
 output_dir = f"{data_config}/config_{run_no}"
 data_file = f"{data_config}/init_snapshot/config_{run_no}_{suffix}.hdf5"
 
-eta = 1e-2
-tend = 50 | units.kyr
+eta = 1e-3
+tend = 100 | units.kyr
 
 run_code(file=data_file, 
          eta=eta, 
          tend=tend, 
          config=output_dir,
-         run_no=run_no)
+         run_no=run_no,
+         resume=True)

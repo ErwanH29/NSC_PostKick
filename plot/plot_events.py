@@ -164,13 +164,21 @@ class NCSCPlotter(object):
     
     def plot_GW_vs_time(self):
         """Plot GW events occuring in time"""
-        
-        def custom_function(time, a):
-            rtide = (2 | units.RSun) * (0.844**2 * MSMBH/(2 | units.MSun))**(1/3)
-            R = (8.*constants.G*MSMBH)/(VKICK**2) / rtide
-            rinfl = constants.G*MSMBH/(200 | units.kms * (MSMBH/(1.66 * 1e8 | units.MSun))**(1/4.86))**2
-            fbound = 11.6*(1.75)**-1.75 * ((constants.G*MSMBH)/(rinfl*VKICK**2))**(3-1.75)
-            formula = a/(2*np.pi*np.log(R)) * (VKICK**3/(constants.G*MSMBH)) * fbound**2 * (time | units.kyr)
+        def custom_function(time, coeff):
+            rinfl = 0.2 | units.pc
+            gamma = 1.75
+            mstar = 2 | units.MSun
+            rtide = (0.844**2 * MSMBH/mstar)**(1./3.) | units.RSun
+            rkick = 8. * constants.G*MSMBH/VKICK**2
+            
+            term1 = (MSMBH/(1e9 | units.MSun))**((gamma)/3) \
+                    * (VKICK/(1500 | units.kms))**(-2*(gamma))
+            term2 = np.log(MSMBH/mstar) / np.log(rkick/rtide)
+            term3 = (VKICK/rkick)
+            term4 = (constants.G*MSMBH/(rinfl*VKICK**2.))**(3.-gamma)
+            term3 = term3.value_in(1/units.Myr)
+            formula = (coeff) * term1 * term2 * term3 * term4 * time **(8/9)
+            
             return formula
         
         BIN_RESOLUTION = 2000
@@ -199,6 +207,7 @@ class NCSCPlotter(object):
             ss_events_run = [ ]
             gw_events_run = [ ]
             
+            NSMBH = 0
             for iter, run in enumerate(IC_params):
                 data_files = natsort.natsorted(glob.glob(f"{run}/*"))
                 
@@ -220,12 +229,17 @@ class NCSCPlotter(object):
                             type_a = int(lines[5].split("<")[1].split("- ")[0])
                             type_b = int(lines[5].split("<")[2].split("- ")[0])
                             
+                            if mass_a > 1000 | units.MSun or mass_b > 1000 | units.MSun:
+                                NSMBH += 1
+                            else:
+                                continue
+                            
                             idx = int(tcoll/TIME_PER_BIN)
                             coll_events_df[idx:] += 1
                             if type_a >= 10:
                                 if type_b >= 10:  # COMPACT - COMPACT
                                     GW_events_df[idx:] += 1
-                                    if max(mass_a/mass_b, mass_b/mass_a) > 1e4:
+                                    if max(mass_a/mass_b, mass_b/mass_a) > 1e3:
                                         emri_events_df[idx:] += 1
                                     
                                 else:  # COMPACT - STAR
@@ -250,36 +264,38 @@ class NCSCPlotter(object):
                     ss_events_run.append(ss_events_df)
                     
             if len(coll_events_run) > 0:
-                median_coll = np.median(coll_events_run, axis=0)
+                mean_coll = np.mean(coll_events_run, axis=0)
                 IQRH_coll = np.percentile(coll_events_run, 75, axis=0)
                 IQL_coll = np.percentile(coll_events_run, 25, axis=0)
                 
-                median_emri = np.median(emri_events_run, axis=0)
+                mean_emri = np.mean(emri_events_run, axis=0)
                 IQRH_emri = np.percentile(emri_events_run, 75, axis=0)
                 IQL_emri = np.percentile(emri_events_run, 25, axis=0)
                 
-                median_tde = np.median(tde_events_run, axis=0)
+                mean_tde = np.mean(tde_events_run, axis=0)
                 IQRH_tde = np.percentile(tde_events_run, 75, axis=0)
                 IQL_tde = np.percentile(tde_events_run, 25, axis=0)
                 
-                median_tde_smbh = np.median(tde_smbh_events_run, axis=0)
+                mean_tde_smbh = np.mean(tde_smbh_events_run, axis=0)
                 IQRH_tde_smbh = np.percentile(tde_smbh_events_run, 75, axis=0)
                 IQRL_tde_smbh = np.percentile(tde_smbh_events_run, 25, axis=0)
                 
-                median_ss = np.median(ss_events_run, axis=0)
+                mean_ss = np.mean(ss_events_run, axis=0)
                 IQRH_ss = np.percentile(ss_events_run, 75, axis=0)
                 IQL_ss = np.percentile(ss_events_run, 25, axis=0)
                 
-                median_gw = np.median(gw_events_run, axis=0)
+                mean_gw = np.mean(gw_events_run, axis=0)
                 IQRH_gw = np.percentile(gw_events_run, 75, axis=0)
                 IQL_gw = np.percentile(gw_events_run, 25, axis=0)
                 
-            coll_events_arr.append([median_coll, IQRH_coll, IQL_coll])
-            emri_events_arr.append([median_emri, IQRH_emri, IQL_emri])
-            gw_events_arr.append([median_gw, IQRH_gw, IQL_gw])
-            tde_events_arr.append([median_tde, IQRH_tde, IQL_tde])
-            tde_smbh_events_arr.append([median_tde_smbh, IQRH_tde_smbh, IQRL_tde_smbh])
-            ss_events_arr.append([median_ss, IQRH_ss, IQL_ss])
+            coll_events_arr.append([mean_coll, IQRH_coll, IQL_coll])
+            emri_events_arr.append([mean_emri, IQRH_emri, IQL_emri])
+            gw_events_arr.append([mean_gw, IQRH_gw, IQL_gw])
+            tde_events_arr.append([mean_tde, IQRH_tde, IQL_tde])
+            tde_smbh_events_arr.append([mean_tde_smbh, IQRH_tde_smbh, IQRL_tde_smbh])
+            ss_events_arr.append([mean_ss, IQRH_ss, IQL_ss])
+            
+            print(run, NSMBH/iter)
             
         data_labels = [
             r"$N_{\rm coll}$", 
@@ -301,7 +317,7 @@ class NCSCPlotter(object):
             ss_events_arr
         ]
         
-        x_fit = np.linspace(0, 0.1, 1000)
+        x_fit = np.linspace(1e-4, 0.1, 1000)
         # Each configuration separately
         for label in range(len(config_name)):
             fig, ax = plt.subplots(figsize=(8, 6))
@@ -336,7 +352,7 @@ class NCSCPlotter(object):
             ax = self.tickers(ax, "plot", True)
             #ax.xaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
             #ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
-            ax.set_xlim(1.e-5, 1e-1)
+            ax.set_xlim(1.e-5, 0.1)
             ax.set_ylim(1.e-3, 1.05*data_array[3][label][1][-1])
             plt.savefig(f"plot/figures/Ncoll_vs_time_{config_name[label]}.pdf", dpi=300, bbox_inches='tight')
             plt.clf()
@@ -353,11 +369,11 @@ class NCSCPlotter(object):
             else:
                 lw = 1
                 ls = "-."
-                
-            median_smoothed = moving_average(data_array[0][label][0], 20)
+                    
+            mean_smoothed = moving_average(data_array[0][label][0], 20)
             IQRH_smoothed = moving_average(data_array[0][label][1], 20)
             IQRL_smoothed = moving_average(data_array[0][label][2], 20)
-            time_smoothed = np.linspace(0, 0.1, len(IQRH_smoothed))
+            time_smoothed = np.linspace(0.001, 0.1, len(IQRH_smoothed))
             
             if label == 0 or label == 1:
                 MSMBH = 1e5 | units.MSun
@@ -367,16 +383,17 @@ class NCSCPlotter(object):
                 VKICK = 300 | units.kms
             else:
                 VKICK = 600 | units.kms
-                
-            params, covariance = curve_fit(custom_function, time_smoothed, median_smoothed, p0=[0], maxfev=10000)
+            
+            if label == 2:
+                params, covariance = curve_fit(custom_function, time_smoothed[time_smoothed<0.01], mean_smoothed[time_smoothed<0.01], p0=[1], maxfev=10000)
+            else:
+                params, covariance = curve_fit(custom_function, time_smoothed, mean_smoothed, p0=[1], maxfev=10000)
+            
             y_fit = custom_function(x_fit, *params)
-            #ax.plot(x_fit, y_fit, color=self.cmap_colours[i], ls="--", lw=1)
-            print(f"Best fit: {params}")
+            print(f"{config_name[label]}, Best fit: {params}, {params/1e6}")
+            ax.plot(x_fit, y_fit, color="black", lw=0.29)
             
-            print((median_smoothed[-1]/100) * (1/np.log(MSMBH.value_in(units.MSun))) * (VKICK**3/MSMBH) * (MSMBH/VKICK**2)**2.5)
-            
-            
-            ax.plot(time_smoothed, median_smoothed,
+            ax.plot(time_smoothed, mean_smoothed,
                     color=self.colours[label//2], lw=lw, ls=ls)
             ax.plot(time_smoothed, IQRH_smoothed, 
                     color=self.colours[label//2],
@@ -398,7 +415,7 @@ class NCSCPlotter(object):
         #ax.xaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
         #ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
         ax.set_xlim(1.e-5, 1.e-1)
-        ax.set_ylim(1.e-3, data_array[0][2][1][-1])
+        ax.set_ylim(1.e-3, 49)#data_array[0][2][1][-1])
         plt.savefig(f"plot/figures/Ncoll_vs_time_all.pdf", dpi=300, bbox_inches='tight')
         plt.clf()
         plt.close()
@@ -960,6 +977,22 @@ class NCSCPlotter(object):
         plt.plot(time, rh_coll)
         plt.axhline(rk.value_in(units.pc), color="black", ls="--")
         plt.show()
+              
+              
+vk = [500, 1000, 2000, 3000, 4000] | units.kms
+masses = [1e6, 3e7] | units.MSun
+
+factor = 0
+for m in masses:
+    for v in vk:
+        if m > 1e7 | units.MSun:
+            rinfl = 10 | units.pc
+        else:
+            rinfl = 3 | units.pc
+        rinfl = (constants.G*m/(200*(m/(1.66*1e8 | units.MSun))**(1/4.86) | units.kms)**(2))
+        factor += (200/v.value_in(units.kms))**(1-3.25) * (m.value_in(units.MSun)) ** (1-1.5)
+print(factor/10)
+#STOP
                         
 plot = NCSCPlotter()
 plot.plot_GW_vs_time()

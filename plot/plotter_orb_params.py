@@ -596,7 +596,7 @@ tGW_time_arr = [[ ] for i in range(len(files))]
 labels = [ ]
 
 for i, data_file in enumerate(files):
-    if i == 0 or i == 1 or i == 7 or i == 8 or i == 14 or i == 15 or i == 21 or i == 22:
+    if i == 7 or i == 8 or i == 14 or i == 15 or i == 21 or i == 22:
         particles = read_set_from_file(data_file, "hdf5")[:500]
     else:
         particles = read_set_from_file(data_file, "hdf5")[:50000]
@@ -660,7 +660,7 @@ for i, data_file in enumerate(files):
                               p.velocity.length())
             tGW_time_arr[i].append(tGW)
     
-    rlag = LagrangianRadii(bounded_pop)[6].value_in(units.pc)
+    """rlag = LagrangianRadii(bounded_pop)[6].value_in(units.pc)
     vdisp = np.std(bounded_pop.velocity.lengths().in_(units.kms))
     
     bound_rh_arr[i].append(rlag)
@@ -672,7 +672,7 @@ for i, label in enumerate(labels):
     print(f"Label: {label}")
     print(f"Mean rHalf: {np.mean(bound_rh_arr[i])}, Median rHalf: {np.median(bound_rh_arr[i])}")
     print(f"Mean SMA: {np.mean(bound_sma_arr[i])}, Median SMA: {np.median(bound_sma_arr[i])}")
-    print(f"Mean vDisp: {np.mean(bound_vdisp_arr[i])}, Median vDisp: {np.median(bound_vdisp_arr[i])}")
+    print(f"Mean vDisp: {np.mean(bound_vdisp_arr[i])}, Median vDisp: {np.median(bound_vdisp_arr[i])}")"""
 
 data_arr = [bound_ecc_arr, 
             bound_sma_arr, 

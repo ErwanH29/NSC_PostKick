@@ -79,8 +79,28 @@ def wang_2004(SMBH_mass):
     TDE_rate = 7.1*10**-1*(vdisp/(70 | units.kms))**3.5*(SMBH_mass/(10**6 | units.MSun))**-alpha | units.kyr**-1
     print(f"Wang 2004 TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, {TDE_rate.in_(1/units.kyr)}")
 
+def our_formula(SMBH_mass, vkick):
+    A = -1.50
+    B = -1.00
+    
+    rinfl = 0.2 | units.pc
+    rkick = 8. * constants.G*SMBH_mass/vkick**2
+    rtide = tidal_radius(SMBH_mass)
+    
+    term1 = (SMBH_mass*constants.G/(rinfl*vkick**2.))**(GAMMA+A)
+    term1 = (180/vkick.value_in(units.kms)**2)**(B+GAMMA) * (SMBH_mass.value_in(units.MSun)/(1e6))**(A+GAMMA)
+    term2 = np.log(SMBH_mass/AVG_STELLAR_MASS) / np.log(rkick/rtide)
+    term3 = (vkick/rkick)
+    term4 = (constants.G*SMBH_mass/(rinfl*vkick**2.))**(3.-GAMMA)
+    
+    Ntde = 4e2 * term1 * term2 * term3 * term4 
+    print(f"Our formula TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, vkick = {vkick.in_(units.kms)}, {Ntde.in_(1/units.Myr)}")
+
 AVG_STELLAR_MASS = 3.07 | units.MSun
 GAMMA = 1.75
+
+our_formula(SMBH_mass=1e5 | units.MSun, vkick=300 | units.kms)
+STOP
 
 # MSMBH =  1e5,    4e5,   1e5,   4e5
 # vKICK =  300,    300,   600,   600

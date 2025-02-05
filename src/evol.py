@@ -1,3 +1,4 @@
+import glob
 import numpy as np
 import os
 import time as cpu_time
@@ -9,12 +10,12 @@ from amuse.lab import write_set_to_file
 from amuse.units import units
 
 from src.environment_functions import handle_coll, handle_supernova
-from src.environment_functions import stellar_tidal_radius
+from src.environment_functions import stellar_tidal_radius, GW_event_kick
 
 class EvolveSystem(object):
     def __init__(self, parti, tend, eta, conv, 
                  GRX_set, no_worker, dir_path, 
-                 fname, no_files):
+                 fname, no_files, resume=False):
         """
         Setting up the simulation code
         
@@ -32,6 +33,10 @@ class EvolveSystem(object):
         self.init_pset = parti
         self.tend = tend
         self.siter = 0
+        if (resume):
+            no_files = glob.glob(os.path.join(dir_path, "simulation_snapshot", fname, "*"))
+            self.siter = len(no_files)
+            self.tend = self.tend - (0.1*self.siter*eta | units.Myr)
         
         self.time = 0. | units.yr
         self.eta = eta
@@ -56,7 +61,7 @@ class EvolveSystem(object):
         self.particles = self.init_pset
         self.grav_code = Ph4(self.conv, number_of_workers=self.no_workers)
         self.grav_code.particles.add_particles(self.particles)
-        self.grav_code.parameters.timestep_parameter = 0.1
+        self.grav_code.parameters.timestep_parameter = 2**-3
 
         self.grav_stopping = self.grav_code.stopping_conditions.collision_detection
         self.grav_stopping.enable()
@@ -113,6 +118,7 @@ class EvolveSystem(object):
                collider = p.as_particle_in_set(self.particles)
                stellar_type_arr.append(collider.stellar_type)
 
+            SMBH = self.particles[self.particles.mass.argmax()]
             distance = (enc_particles_set[0].position - enc_particles_set[1].position).length()
             if max(stellar_type_arr) < 10 | units.stellar_type:  # Both below white dwarf
                 coll_a_radius = enc_particles_set[0].as_particle_in_set(self.stellar_code.particles).radius
@@ -129,12 +135,8 @@ class EvolveSystem(object):
                     newp.radius = stellar_tidal_radius(newp, self.particles.mass.max())
                     self.particles.synchronize_to(self.grav_code.particles)
 
-            else:
-                print("Compact Object event")         
-                
-                SMBH = self.particles[self.particles.mass.argmax()]
-                # If not SMBH (with tolerance) and at least one star --> Star - Compact Object collision
-                if max(enc_particles_set.mass) < 0.75*SMBH.mass and min(stellar_type_arr) < 10 | units.stellar_type:
+            elif min(stellar_type_arr) < 10 | units.stellar_type:  # One compact object - one star
+                if max(enc_particles_set.mass) < 0.75*SMBH.mass:  # Non-SMBH TDE
 
                     st_idx = np.asarray(stellar_type_arr).argmin()
                     co_idx = np.asarray(stellar_type_arr).argmax()
@@ -154,8 +156,8 @@ class EvolveSystem(object):
                             self.stellar_code.particles.remove_particle(coll_b)
 
                         self.particles.synchronize_to(self.grav_code.particles)
-
-                else:  # Either SMBH TDE, or GW event so no radius change needed
+                        
+                else:  # SMBH TDE
                     newp = self.process_merger(enc_particles_set, stellar_type_arr)
                     coll_a = enc_particles_set[0].as_particle_in_set(self.stellar_code.particles)
                     coll_b = enc_particles_set[1].as_particle_in_set(self.stellar_code.particles)
@@ -165,6 +167,26 @@ class EvolveSystem(object):
                         self.stellar_code.particles.remove_particle(coll_b)
                     
                     self.particles.synchronize_to(self.grav_code.particles)
+
+            else:  # GW event
+                newp = self.process_merger(enc_particles_set, stellar_type_arr)
+                newp.mass *= 0.95  # Phys. Rev. Lett., 95, 121101; Phys.Rev. Lett., 96, 111101
+                
+                bin_sys = enc_particles_set.copy()
+                bin_sys.move_to_center()
+                recoil_kick = GW_event_kick(bin_sys)
+                newp.velocity += recoil_kick
+                
+                print(f"Applied vkick: {recoil_kick.in_(units.kms)} ({recoil_kick.length().in_(units.kms)})")
+                
+                coll_a = enc_particles_set[0].as_particle_in_set(self.stellar_code.particles)
+                coll_b = enc_particles_set[1].as_particle_in_set(self.stellar_code.particles)
+                if coll_a is not None:
+                    self.stellar_code.particles.remove_particle(coll_a)
+                if coll_b is not None:
+                    self.stellar_code.particles.remove_particle(coll_b)
+                
+                self.particles.synchronize_to(self.grav_code.particles)
 
     def run_code(self):
         

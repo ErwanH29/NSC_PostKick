@@ -48,7 +48,7 @@ class ClusterInitialise(object):
             particles (object):  Particle set
         """
         SMBH_parti = MW_SMBH(mass)
-        nStar = 25000
+        nStar = 133000
         print(f"#Stars ={nStar}")
 
         particles = Particles(1)
