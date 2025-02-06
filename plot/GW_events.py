@@ -234,7 +234,6 @@ class NCSCPlotter(object):
                         ecc = float(lines[7].split(": ")[1])
                         
                         if abs(ecc) < 1:    
-                            print(max(mass_a, mass_b))
                             if max(mass_a, mass_b) > 1e4 | units.MSun:
                                 sma_array["EMRI"].append(sma)
                                 ecc_array["EMRI"].append(ecc)
@@ -290,12 +289,12 @@ class NCSCPlotter(object):
                               )
         ax = fig.add_subplot(gs[1, 0])
         ax1 = fig.add_subplot(gs[0, 0], sharex=ax)
-        ax2 = fig.add_subplot(gs[1, 1], sharey=ax)
-        for ax_ in [ax, ax1, ax2]:
+        #ax2 = fig.add_subplot(gs[1, 1], sharey=ax)
+        for ax_ in [ax, ax1]:#, ax2]:
             self.tickers(ax_, "plot", False)
             
         ax1.tick_params(axis="x", labelbottom=False)
-        ax2.tick_params(axis="y", labelleft=False)
+        #ax2.tick_params(axis="y", labelleft=False)
         self.interferometer_plotter(ax)
         
         for i, key in enumerate(freq_array.keys()):
@@ -310,15 +309,15 @@ class NCSCPlotter(object):
                     KDE_x, KDE_y = self.KDE_plotter([x,y])
                     
                     ax1.plot(KDE_x[0], KDE_x[1], color=c)
-                    ax2.plot(KDE_y[0], KDE_y[1], color=c)
+                    #ax2.plot(KDE_y[0], KDE_y[1], color=c)
                     ax1.fill_between(KDE_x[0], KDE_x[1], color=c, alpha=0.35)
-                    ax2.fill_between(KDE_y[0], KDE_y[1], color=c, alpha=0.35)
+                    #ax2.fill_between(KDE_y[0], KDE_y[1], color=c, alpha=0.35)
             
         
         ax.set_xlim(-4.6, 0)
         ax.set_ylim(-31, -17)
         ax1.set_ylim(0.01, 1.04)
-        ax2.set_xlim(0.01, 1.04)
+        #ax2.set_xlim(0.01, 1.04)
         """ax.legend(
             fontsize=13, 
             bbox_to_anchor=(1.35,1.5), 
@@ -330,7 +329,7 @@ class NCSCPlotter(object):
         ax.set_xlabel(r"$\log_{10}f$ [Hz]", fontsize=self.TICK_SIZE)
         ax.set_ylabel(r"$\log_{10}h$", fontsize=self.TICK_SIZE)
         ax1.set_ylabel(r'$\rho/\rho_{\rm{max}}$', fontsize=self.TICK_SIZE)
-        ax2.set_xlabel(r'$\rho/\rho_{\rm{max}}$', fontsize=self.TICK_SIZE)
+        #ax2.set_xlabel(r'$\rho/\rho_{\rm{max}}$', fontsize=self.TICK_SIZE)
         
         plt.savefig(f"plot/figures/GW_freq_strain.pdf", dpi=300, bbox_inches='tight')
         plt.close()

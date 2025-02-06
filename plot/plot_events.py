@@ -74,9 +74,10 @@ class NCSCPlotter(object):
         ax.yaxis.set_minor_locator(mtick.AutoMinorLocator())
 
         if (sig_fig):
-            formatter = StrMethodFormatter("{x:.2f}")
-            ax.xaxis.set_major_formatter(formatter)
-            ax.yaxis.set_major_formatter(formatter)
+            formatter_x = StrMethodFormatter("{x:.2f}")
+            formatter_y = StrMethodFormatter("{x:.0f}")
+            ax.xaxis.set_major_formatter(formatter_x)
+            ax.yaxis.set_major_formatter(formatter_y)
 
         if ptype == "hist":
             ax.tick_params(axis="y", labelsize=self.TICK_SIZE)
@@ -165,19 +166,20 @@ class NCSCPlotter(object):
     def plot_GW_vs_time(self):
         """Plot GW events occuring in time"""
         def custom_function(time, coeff):
-            rinfl = 0.2 | units.pc
+            vdisp = 200 * (MSMBH/(1.66 * 1e8 | units.MSun))**(1/4.86) | units.kms
+            rinfl = constants.G*MSMBH/(vdisp**2)
             gamma = 1.75
-            mstar = 2 | units.MSun
-            rtide = (0.844**2 * MSMBH/mstar)**(1./3.) | units.RSun
             rkick = 8. * constants.G*MSMBH/VKICK**2
+            AVG_STAR_MASS = 2.43578679652 | units.MSun
+            rtide = (0.844**2 * MSMBH/AVG_STAR_MASS)**(1./3.) | units.RSun
             
-            term1 = (MSMBH/(1e9 | units.MSun))**((gamma)/3) \
-                    * (VKICK/(1500 | units.kms))**(-2*(gamma))
-            term2 = np.log(MSMBH/mstar) / np.log(rkick/rtide)
+            term1 = 0.14 * (MSMBH/AVG_STAR_MASS)**((gamma-1)/3) * (VKICK/vdisp)**(-2*(gamma-1))
+            term2 = np.log(MSMBH/AVG_STAR_MASS) / np.log(rkick/rtide)
             term3 = (VKICK/rkick)
-            term4 = (constants.G*MSMBH/(rinfl*VKICK**2.))**(3.-gamma)
+            term4 = 11.6*gamma**-1.75 * (constants.G*MSMBH/(rinfl*VKICK**2.))**(3.-gamma)
             term3 = term3.value_in(1/units.Myr)
-            formula = (coeff) * term1 * term2 * term3 * term4 * time **(8/9)
+            
+            formula = (coeff) * term1 * term2 * term3 * term4 * time**(8/9)
             
             return formula
         
@@ -370,9 +372,9 @@ class NCSCPlotter(object):
                 lw = 1
                 ls = "-."
                     
-            mean_smoothed = moving_average(data_array[0][label][0], 20)
-            IQRH_smoothed = moving_average(data_array[0][label][1], 20)
-            IQRL_smoothed = moving_average(data_array[0][label][2], 20)
+            mean_smoothed = moving_average(data_array[0][label][0], 15)
+            IQRH_smoothed = moving_average(data_array[0][label][1], 15)
+            IQRL_smoothed = moving_average(data_array[0][label][2], 15)
             time_smoothed = np.linspace(0.001, 0.1, len(IQRH_smoothed))
             
             if label == 0 or label == 1:
@@ -385,7 +387,7 @@ class NCSCPlotter(object):
                 VKICK = 600 | units.kms
             
             if label == 2:
-                params, covariance = curve_fit(custom_function, time_smoothed[time_smoothed<0.01], mean_smoothed[time_smoothed<0.01], p0=[1], maxfev=10000)
+                params, covariance = curve_fit(custom_function, time_smoothed[time_smoothed<0.015], mean_smoothed[time_smoothed<0.015], p0=[1], maxfev=10000)
             else:
                 params, covariance = curve_fit(custom_function, time_smoothed, mean_smoothed, p0=[1], maxfev=10000)
             

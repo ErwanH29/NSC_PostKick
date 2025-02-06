@@ -1,5 +1,6 @@
 import glob
 import numpy as np
+import os
 import re
 
 from amuse.io.base import read_set_from_file
@@ -40,14 +41,18 @@ def run_code(file, eta, tend, config, run_no, resume):
         resume (Bool):  Resume simulation
     """
     no_files = 0
-
+    if (resume):
+        config = os.path.join(config.split("config")[0], "simulation_snapshot", "config" + config.split("config")[1])
+        file = (sort_files(config))[-1]
+        
     pset = read_set_from_file(file, "hdf5")
     SMBH = pset[pset.mass.argmax()]
     SMBH.stellar_type = 14 | units.stellar_type
     compact_objects = pset.stellar_type > 13 | units.stellar_type
     pset[compact_objects].radius = 3*(2*constants.G*pset[compact_objects].mass)/(constants.c**2)
     pset[~compact_objects].radius = stellar_tidal_radius(pset[~compact_objects], SMBH.mass)
-    
+    print(np.sum(pset.coll_events))
+    STOP
     fname = f"config_{run_no}"
     output_dir = config.split("config")[0]
     code_conv = nbody_system.nbody_to_si(pset.mass.sum(), 1 | units.pc)
