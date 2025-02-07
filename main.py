@@ -42,8 +42,8 @@ def run_code(file, eta, tend, config, run_no, resume):
     """
     no_files = 0
     if (resume):
-        config = os.path.join(config.split("config")[0], "simulation_snapshot", "config" + config.split("config")[1])
-        file = (sort_files(config))[-1]
+        snapshot_files = os.path.join(config.split("config")[0], "simulation_snapshot", "config" + config.split("config")[1])
+        file = (sort_files(snapshot_files))[-1]
         
     pset = read_set_from_file(file, "hdf5")
     SMBH = pset[pset.mass.argmax()]
@@ -51,13 +51,12 @@ def run_code(file, eta, tend, config, run_no, resume):
     compact_objects = pset.stellar_type > 13 | units.stellar_type
     pset[compact_objects].radius = 3*(2*constants.G*pset[compact_objects].mass)/(constants.c**2)
     pset[~compact_objects].radius = stellar_tidal_radius(pset[~compact_objects], SMBH.mass)
-    print(np.sum(pset.coll_events))
-    STOP
+    
     fname = f"config_{run_no}"
     output_dir = config.split("config")[0]
     code_conv = nbody_system.nbody_to_si(pset.mass.sum(), 1 | units.pc)
     evolve_system = EvolveSystem(pset, tend, eta, code_conv, SMBH,
-                                 no_worker=1, dir_path=output_dir,
+                                 no_worker=30, dir_path=output_dir,
                                  fname=fname, no_files=no_files,
                                  resume=resume)
     evolve_system.initialise_code()
@@ -67,7 +66,7 @@ def run_code(file, eta, tend, config, run_no, resume):
 vkick = "300"
 mSMBH = "4e5"
 Nimbh = 0
-run_no = 4
+run_no = 0
 suffix = "bound"
 
 data_config = f"data/{vkick}kms_m{mSMBH}/Nimbh{Nimbh}_RA_BH_Run"

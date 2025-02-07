@@ -174,6 +174,7 @@ class NCSCPlotter(object):
             rtide = (0.844**2 * MSMBH/AVG_STAR_MASS)**(1./3.) | units.RSun
             
             term1 = 0.14 * (MSMBH/AVG_STAR_MASS)**((gamma-1)/3) * (VKICK/vdisp)**(-2*(gamma-1))
+            #term1 = 0.14 * (MSMBH/AVG_STAR_MASS)**((1-gamma)/3) * (rkick/rtide)**((gamma-1))
             term2 = np.log(MSMBH/AVG_STAR_MASS) / np.log(rkick/rtide)
             term3 = (VKICK/rkick)
             term4 = 11.6*gamma**-1.75 * (constants.G*MSMBH/(rinfl*VKICK**2.))**(3.-gamma)
@@ -231,10 +232,10 @@ class NCSCPlotter(object):
                             type_a = int(lines[5].split("<")[1].split("- ")[0])
                             type_b = int(lines[5].split("<")[2].split("- ")[0])
                             
-                            if mass_a > 1000 | units.MSun or mass_b > 1000 | units.MSun:
+                            """if mass_a > 1000 | units.MSun or mass_b > 1000 | units.MSun:
                                 NSMBH += 1
                             else:
-                                continue
+                                continue"""
                             
                             idx = int(tcoll/TIME_PER_BIN)
                             coll_events_df[idx:] += 1
@@ -387,7 +388,7 @@ class NCSCPlotter(object):
                 VKICK = 600 | units.kms
             
             if label == 2:
-                params, covariance = curve_fit(custom_function, time_smoothed[time_smoothed<0.015], mean_smoothed[time_smoothed<0.015], p0=[1], maxfev=10000)
+                params, covariance = curve_fit(custom_function, time_smoothed[time_smoothed<0.025], mean_smoothed[time_smoothed<0.025], p0=[1], maxfev=10000)
             else:
                 params, covariance = curve_fit(custom_function, time_smoothed, mean_smoothed, p0=[1], maxfev=10000)
             

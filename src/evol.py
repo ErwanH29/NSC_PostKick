@@ -33,11 +33,14 @@ class EvolveSystem(object):
         self.init_pset = parti
         self.tend = tend
         self.siter = 0
+        self.resume_time = 0 | units.yr
         if (resume):
             no_files = glob.glob(os.path.join(dir_path, "simulation_snapshot", fname, "*"))
             self.siter = len(no_files)
             self.tend = self.tend - (0.1*self.siter*eta | units.Myr)
-        
+            self.siter -= 1
+            self.resume_time = (0.1*self.siter*eta | units.Myr)
+
         self.time = 0. | units.yr
         self.eta = eta
         self.dt = self.eta * tend
@@ -99,9 +102,10 @@ class EvolveSystem(object):
             overwrite_file=True
         )
 
+        tcoll = self.grav_code.model_time + self.resume_time
         newp = handle_coll(self.particles, 
                            enc_particles_set, 
-                           self.grav_code.model_time, 
+                           tcoll, 
                            self.coll_path,
                            stellar_type_array)
         return newp
@@ -170,7 +174,6 @@ class EvolveSystem(object):
 
             else:  # GW event
                 newp = self.process_merger(enc_particles_set, stellar_type_arr)
-                newp.mass *= 0.95  # Phys. Rev. Lett., 95, 121101; Phys.Rev. Lett., 96, 111101
                 
                 bin_sys = enc_particles_set.copy()
                 bin_sys.move_to_center()
@@ -219,6 +222,7 @@ class EvolveSystem(object):
                 if self.grav_stopping.is_set():
                     self.star_local_channel.copy()
                     self.check_merger()
+
                 self.chnl_from_grav.copy()
                      
                 self.stellar_code.evolve_model(self.time)
