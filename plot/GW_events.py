@@ -283,7 +283,7 @@ class NCSCPlotter(object):
                 strain_array[key].append(strain)
         
         fig = plt.figure(figsize=(8, 6))
-        gs = fig.add_gridspec(2, 2,  width_ratios=(4,2), height_ratios=(2,4),
+        gs = fig.add_gridspec(2, 2,  width_ratios=(4,2), height_ratios=(2,5),
                               left=0.1, right=0.9, bottom=0.1, top=0.9,
                               wspace=0.05, hspace=0.05
                               )
@@ -314,7 +314,7 @@ class NCSCPlotter(object):
                     #ax2.fill_between(KDE_y[0], KDE_y[1], color=c, alpha=0.35)
             
         
-        ax.set_xlim(-4.6, 0)
+        ax.set_xlim(-4.6, 1)
         ax.set_ylim(-31, -17)
         ax1.set_ylim(0.01, 1.04)
         #ax2.set_xlim(0.01, 1.04)
@@ -374,7 +374,7 @@ class NCSCPlotter(object):
         Sn = lisa.Sn(x_temp)
 
         ax.plot(np.log10(x_temp), np.log10(np.sqrt(x_temp*Sn)), color='black')
-        ax.text(-3.75, -19.3, 'LISA', rotation=-29, color='black',fontsize=self.TICK_SIZE+3, )
+        ax.text(-3.75, -19.3, 'LISA', rotation=-34, color='black',fontsize=self.TICK_SIZE+3, )
                             
         
 plot = NCSCPlotter()
