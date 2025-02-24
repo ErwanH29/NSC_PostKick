@@ -31,7 +31,8 @@ def TDE_rate_NR(SMBH_mass):
     """Eqn 38(a) of Wang & Merritt 2004"""
     vdisp = dispersion_velocity(SMBH_mass)
     rate = 4.2*10**-4 * (vdisp/(100 | units.kms))**(-1.15) | units.yr**-1
-    return rate
+    #rate = 7.1*10**-4 * (vdisp/(70 | units.kms))**(3.5) * (SMBH_mass/(1e6 | units.MSun))**-1 | units.yr**-1
+    return rate #* (SMBH_mass/(10**6 | units.MSun))**-0.46
 
 def precession_tau(SMBH_mass, vkick, sma):
     """Eqn 1 ofRauch & Tremaine 1996"""

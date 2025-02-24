@@ -165,7 +165,7 @@ class NCSCPlotter(object):
     
     def plot_GW_vs_time(self):
         """Plot GW events occuring in time"""
-        def custom_function(time, coeff, alpha):
+        def custom_function(time, coeff):
             vdisp = 200 * (MSMBH/(1.66 * 1e8 | units.MSun))**(1/4.86) | units.kms
             rinfl = constants.G*MSMBH/(vdisp**2)
             gamma = 1.75
@@ -173,18 +173,18 @@ class NCSCPlotter(object):
             AVG_STAR_MASS = 2.43578679652 | units.MSun
             rtide = (0.844**2 * MSMBH/AVG_STAR_MASS)**(1./3.) | units.RSun
             
-            term1 = 0.14 * (MSMBH/AVG_STAR_MASS)**((gamma-1)/3) * (VKICK/vdisp)**(-2*(gamma-1))
+            term1 = 0.14*(MSMBH/AVG_STAR_MASS)**((gamma-1)/0.56) * (VKICK/vdisp)**(-0.3*(gamma-1))
             #term1 = 0.14 * (MSMBH/AVG_STAR_MASS)**((1-gamma)/3) * (rkick/rtide)**((gamma-1))
             term2 = np.log(MSMBH/AVG_STAR_MASS) / np.log(rkick/rtide)
             term3 = (VKICK/rkick)
             term4 = 11.6*gamma**-1.75 * (constants.G*MSMBH/(rinfl*VKICK**2.))**(3.-gamma)
-            term3 = term3.value_in(1/units.Myr)
+            time = time | units.Myr
             
-            tau = (3.6 * constants.G * MSMBH**2 / (VKICK**3 * AVG_STAR_MASS)).value_in(units.Myr)
-            exp_term = np.exp(-time/tau)
-            prefix = tau
+            term_t = term1 * term2 * term3 * term4
+            term_t = term_t.value_in(units.Myr**-1)
+            time = time.value_in(units.Myr)
             
-            formula = (coeff) * term1 * term2 * term3 * term4  * time**(0.9)#alpha #* exp_term
+            formula = (coeff) * term_t  * time**(0.8) #* exp_term
             
             return formula
         
@@ -377,10 +377,10 @@ class NCSCPlotter(object):
                 lw = 1
                 ls = "-."
                     
-            median_smoothed = moving_average(data_array[0][label][0], 1)
-            IQRH_smoothed = moving_average(data_array[0][label][1], 1)
-            IQRL_smoothed = moving_average(data_array[0][label][2], 1)
-            time_smoothed = np.linspace(0.001, 0.1, len(IQRH_smoothed))
+            median_smoothed = moving_average(data_array[0][label][0], 30)
+            IQRH_smoothed = moving_average(data_array[0][label][1], 30)
+            IQRL_smoothed = moving_average(data_array[0][label][2], 30)
+            time_smoothed = np.linspace(0.0, 0.1, len(IQRH_smoothed))
             
             if label == 0 or label == 1:
                 MSMBH = 1e5 | units.MSun
@@ -392,16 +392,14 @@ class NCSCPlotter(object):
                 VKICK = 600 | units.kms
             
             if label == 2:
-                params, covariance = curve_fit(custom_function, time_smoothed[time_smoothed<0.015], median_smoothed[time_smoothed<0.015], p0=[1,1], maxfev=10000)
-            elif label == 3:
-                params, covariance = curve_fit(custom_function, time_smoothed[time_smoothed<0.045], median_smoothed[time_smoothed<0.045], p0=[1,1], maxfev=10000)
+                params, covariance = curve_fit(custom_function, time_smoothed[time_smoothed<0.075], median_smoothed[time_smoothed<0.075], p0=[1], maxfev=10000)
             else:
-                params, covariance = curve_fit(custom_function, time_smoothed, median_smoothed, p0=[1,1], maxfev=10000)
+                params, covariance = curve_fit(custom_function, time_smoothed, median_smoothed, p0=[1], maxfev=10000)
             
             y_fit = custom_function(x_fit, *params)
             print(f"{config_name[label]}, Best fit: {params}, {params/1e6}")
             ax.plot(x_fit, y_fit, color="black", lw=0.29)
-            
+            print(y_fit[-1])
             ax.plot(time_smoothed, median_smoothed,
                     color=self.colours[label//2], lw=lw, ls=ls)
             ax.plot(time_smoothed, IQRH_smoothed, 
@@ -424,7 +422,7 @@ class NCSCPlotter(object):
         #ax.xaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
         #ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
         ax.set_xlim(1.e-5, 1.e-1)
-        ax.set_ylim(1.e-3, 49)#data_array[0][2][1][-1])
+        ax.set_ylim(1.e-3, 79)#data_array[0][2][1][-1])
         plt.savefig(f"plot/figures/Ncoll_vs_time_all.pdf", dpi=300, bbox_inches='tight')
         plt.clf()
         plt.close()
