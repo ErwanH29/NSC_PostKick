@@ -173,7 +173,7 @@ class NCSCPlotter(object):
             AVG_STAR_MASS = 2.43578679652 | units.MSun
             rtide = (0.844**2 * MSMBH/AVG_STAR_MASS)**(1./3.) | units.RSun
             
-            term1 = 0.14*(MSMBH/AVG_STAR_MASS)**((gamma-1)/0.56) * (VKICK/vdisp)**(-0.3*(gamma-1))
+            term1 = 0.14*(MSMBH/AVG_STAR_MASS)**(0.75*(gamma-1)) * (VKICK/vdisp)**(-1.2*(gamma-1))
             #term1 = 0.14 * (MSMBH/AVG_STAR_MASS)**((1-gamma)/3) * (rkick/rtide)**((gamma-1))
             term2 = np.log(MSMBH/AVG_STAR_MASS) / np.log(rkick/rtide)
             term3 = (VKICK/rkick)
@@ -184,7 +184,7 @@ class NCSCPlotter(object):
             term_t = term_t.value_in(units.Myr**-1)
             time = time.value_in(units.Myr)
             
-            formula = (coeff) * term_t  * time**(0.8) #* exp_term
+            formula = (coeff) * term_t  * time
             
             return formula
         
@@ -236,10 +236,10 @@ class NCSCPlotter(object):
                             type_a = int(lines[5].split("<")[1].split("- ")[0])
                             type_b = int(lines[5].split("<")[2].split("- ")[0])
                             
-                            if mass_a > 1000 | units.MSun or mass_b > 1000 | units.MSun:
-                                NSMBH += 1
-                            else:
-                                continue
+                            #if mass_a > 1000 | units.MSun or mass_b > 1000 | units.MSun:
+                            #    NSMBH += 1
+                            #else:
+                            #    continue
                             
                             idx = int(tcoll/TIME_PER_BIN)
                             coll_events_df[idx:] += 1
@@ -333,20 +333,19 @@ class NCSCPlotter(object):
             
             for i in range(len(data_array)-1):
                 i += 1
-                if i == 0:
-                    ax.plot(time_array, data_array[i][label][1], 
-                            color=self.cmap_colours[i],
-                            alpha=0.3, lw=1)
-                    ax.plot(time_array, data_array[i][label][2], 
-                            color=self.cmap_colours[i],
-                            alpha=0.3,lw=1)
-                    ax.fill_between(
-                        time_array, 
-                        data_array[i][label][1],
-                        data_array[i][label][2], 
-                        color=self.cmap_colours[i], 
-                        alpha=0.3
-                    )
+                ax.plot(time_array, data_array[i][label][1], 
+                        color=self.cmap_colours[i],
+                        alpha=0.4, lw=1)
+                ax.plot(time_array, data_array[i][label][2], 
+                        color=self.cmap_colours[i],
+                        alpha=0.4,lw=1)
+                ax.fill_between(
+                    time_array, 
+                    data_array[i][label][1],
+                    data_array[i][label][2], 
+                    color=self.cmap_colours[i], 
+                    alpha=0.4
+                )
                     
                 ax.plot(
                     time_array, data_array[i][label][0], 
@@ -360,7 +359,7 @@ class NCSCPlotter(object):
             #ax.xaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
             #ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
             ax.set_xlim(1.e-5, 0.1)
-            ax.set_ylim(1.e-3, 1.05*data_array[3][label][1][-1])
+            ax.set_ylim(1.e-3, 1.2*data_array[3][label][1][-1])
             plt.savefig(f"plot/figures/Ncoll_vs_time_{config_name[label]}.pdf", dpi=300, bbox_inches='tight')
             plt.clf()
             plt.close()

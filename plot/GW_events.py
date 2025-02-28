@@ -41,7 +41,7 @@ class NCSCPlotter(object):
         self.colours = ["red", "blue"]
         self.colours_two = ["blue", "red"]
         self.redshift = 1
-        self.lum_dist = 6801.9 | units.Mpc
+        self.lum_dist = 6849.8 | units.Mpc
         
         cmap = plt.colormaps['cool']
         self.cmap_colours = cmap(np.linspace(0.15, 1, 7))

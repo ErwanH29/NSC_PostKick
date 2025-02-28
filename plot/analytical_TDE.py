@@ -1,5 +1,6 @@
 from amuse.lab import units, constants
 import numpy as np
+import matplotlib.ticker as mtick
 
 def sphere_of_influence(SMBH_mass):
     """Extract sphere of influence"""
@@ -79,26 +80,85 @@ def wang_2004(SMBH_mass):
     TDE_rate = 7.1*10**-1*(vdisp/(70 | units.kms))**3.5*(SMBH_mass/(10**6 | units.MSun))**-alpha | units.kyr**-1
     print(f"Wang 2004 TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, {TDE_rate.in_(1/units.kyr)}")
 
-def our_formula(SMBH_mass, vkick):
-    A = -1.50
-    B = -1.00
-    
-    rinfl = 0.2 | units.pc
+def our_formula(SMBH_mass, vkick, gamma):
+    vdisp = 200 * (SMBH_mass/(1.66 * 1e8 | units.MSun))**(1/4.86) | units.kms
+    rinfl = constants.G*SMBH_mass/(vdisp**2)
     rkick = 8. * constants.G*SMBH_mass/vkick**2
-    rtide = tidal_radius(SMBH_mass)
+    AVG_STAR_MASS = 2.43578679652 | units.MSun
+    rtide = (0.844**2 * SMBH_mass/AVG_STAR_MASS)**(1./3.) | units.RSun
     
-    term1 = (SMBH_mass*constants.G/(rinfl*vkick**2.))**(GAMMA+A)
-    term1 = (180/vkick.value_in(units.kms)**2)**(B+GAMMA) * (SMBH_mass.value_in(units.MSun)/(1e6))**(A+GAMMA)
-    term2 = np.log(SMBH_mass/AVG_STELLAR_MASS) / np.log(rkick/rtide)
+    term1 = 0.14*(SMBH_mass/AVG_STAR_MASS)**(0.75*(gamma-1)) * (vkick/vdisp)**(-1.2*(gamma-1))
+    term2 = np.log(SMBH_mass/AVG_STAR_MASS) / np.log(rkick/rtide)
     term3 = (vkick/rkick)
-    term4 = (constants.G*SMBH_mass/(rinfl*vkick**2.))**(3.-GAMMA)
+    term4 = 11.6*gamma**-1.75 * (constants.G*SMBH_mass/(rinfl*vkick**2.))**(3.-gamma)
     
-    Ntde = 4e2 * term1 * term2 * term3 * term4 
-    print(f"Our formula TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, vkick = {vkick.in_(units.kms)}, {Ntde.in_(1/units.Myr)}")
+    term_t = term1 * term2 * term3 * term4
+    term_t = term_t#.in(units.yr**-1)
+    
+    formula = (2e-1) * term_t # in kyr^-1
+    print(f"Our formula TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, g = {gamma}, vkick = {vkick.in_(units.kms)}, {formula.value_in(units.kyr**-1)}")
+    return formula.value_in(units.kyr**-1)
+
+import matplotlib.pyplot as plt
+import matplotlib
 
 AVG_STELLAR_MASS = 3.07 | units.MSun
 GAMMA = 1.75
+plt.rcParams["font.family"] = "Times New Roman"
+plt.rcParams["mathtext.fontset"] = "cm"
 
+cmap = matplotlib.colormaps['cool']
+colours = cmap(np.linspace(0, 1, 5))
+labels = [
+    r"$10^5\ M_{\odot}$", 
+    r"$4 \times\ 10^5 M_{\odot}$", 
+    r"$10^6\ M_{\odot}$", 
+    r"$4 \times 10^6\ M_{\odot}$", 
+    r"$10^7\ M_{\odot}$"
+]
+
+fig, ax = plt.subplots()
+ax.yaxis.set_ticks_position('both')
+ax.xaxis.set_ticks_position('both')
+ax.xaxis.set_minor_locator(mtick.AutoMinorLocator())
+ax.yaxis.set_minor_locator(mtick.AutoMinorLocator())
+ax.tick_params(axis="y", which='both', 
+                direction="in", 
+                labelsize=14)
+ax.tick_params(axis="x", which='both', 
+                direction="in", 
+                labelsize=14)
+
+gamma = np.linspace(0.5, 2., 100)
+for i,mass in enumerate([1e5, 4e5, 1e6, 4e6, 1e7]):
+    mass = mass | units.MSun
+    vdisp = 200 * (mass/(1.66 * 10**8 | units.MSun))**(1/4.86) | units.kms
+    rate_arr = [ ]
+    rate_us = [ ]
+    for g in gamma:
+        alpha = (27-19*g)/(6*(4-g))
+        rate = 7.1*10**-1*(vdisp/(70 | units.kms))**3.5*(mass/(10**6 | units.MSun))**-alpha
+        rate_arr.append(1e3 * rate)
+        rate_us.append(1e3 * our_formula(mass, 300 | units.kms, gamma=g))
+    ax.plot(gamma, rate_arr, label=labels[i], color=colours[i])
+    ax.plot(gamma, rate_us, linestyle="-.", color=colours[i])
+    
+our_formula(SMBH_mass=1e7 | units.MSun, vkick=1000 | units.kms, gamma=1.75)
+TOP
+ax.set_xlabel(r"$\gamma$", fontsize=14)
+ax.set_ylabel(r"$\dot{N}$ [Myr$^{-1}$]", fontsize=14)
+ax.legend(fontsize=14, loc="lower right")
+ax.set_xlim(0.5,2.)
+ax.set_ylim(1e-2, rate_arr[-1])
+ax.set_yscale("log")
+plt.show()
+STOP
+plt.savefig(f"plot/figures/wang_plot.pdf", dpi=300, bbox_inches='tight')
+
+
+wang_2004(SMBH_mass=1e7 | units.MSun)
+wang_2004(SMBH_mass=1e5 | units.MSun)
+wang_2004(SMBH_mass=4e5 | units.MSun)
 our_formula(SMBH_mass=1e5 | units.MSun, vkick=300 | units.kms)
 STOP
 
