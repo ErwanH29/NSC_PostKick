@@ -236,10 +236,10 @@ class NCSCPlotter(object):
                             type_a = int(lines[5].split("<")[1].split("- ")[0])
                             type_b = int(lines[5].split("<")[2].split("- ")[0])
                             
-                            #if mass_a > 1000 | units.MSun or mass_b > 1000 | units.MSun:
-                            #    NSMBH += 1
-                            #else:
-                            #    continue
+                            if mass_a > 1000 | units.MSun or mass_b > 1000 | units.MSun:
+                                NSMBH += 1
+                            else:
+                                continue
                             
                             idx = int(tcoll/TIME_PER_BIN)
                             coll_events_df[idx:] += 1
@@ -365,6 +365,7 @@ class NCSCPlotter(object):
             plt.close()
         
         fig, ax = plt.subplots(figsize=(8, 6))
+        ax = self.tickers(ax, "plot", True)
         ax.set_xlabel(r"$t$ [Myr]", fontsize=self.AXLABEL_SIZE)
         ax.set_ylabel(r"$N_{\rm coll}$", fontsize=self.AXLABEL_SIZE)
         for label in range(len(config_name)):
@@ -417,7 +418,6 @@ class NCSCPlotter(object):
         ax.scatter(None, None, color="red", label=r"$10^{5}$ M$_\odot$")
         ax.scatter(None, None, color="blue", label=r"$4\times10^{5}$ M$_\odot$")    
         ax.legend(fontsize=self.TICK_SIZE, loc="upper left")
-        ax = self.tickers(ax, "plot", True)
         #ax.xaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
         #ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
         ax.set_xlim(1.e-5, 1.e-1)

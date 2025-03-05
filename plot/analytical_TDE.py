@@ -89,15 +89,14 @@ def our_formula(SMBH_mass, vkick, gamma):
     
     term1 = 0.14*(SMBH_mass/AVG_STAR_MASS)**(0.75*(gamma-1)) * (vkick/vdisp)**(-1.2*(gamma-1))
     term2 = np.log(SMBH_mass/AVG_STAR_MASS) / np.log(rkick/rtide)
-    term3 = (vkick/rkick)
+    term3 = (vkick/rkick).value_in(units.yr**-1)
     term4 = 11.6*gamma**-1.75 * (constants.G*SMBH_mass/(rinfl*vkick**2.))**(3.-gamma)
     
     term_t = term1 * term2 * term3 * term4
-    term_t = term_t#.in(units.yr**-1)
     
     formula = (2e-1) * term_t # in kyr^-1
-    print(f"Our formula TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, g = {gamma}, vkick = {vkick.in_(units.kms)}, {formula.value_in(units.kyr**-1)}")
-    return formula.value_in(units.kyr**-1)
+    print(f"Our formula TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, g = {gamma}, vkick = {vkick.in_(units.kms)}, {formula}")
+    return formula #.value_in(units.kyr**-1)
 
 import matplotlib.pyplot as plt
 import matplotlib
@@ -110,14 +109,14 @@ plt.rcParams["mathtext.fontset"] = "cm"
 cmap = matplotlib.colormaps['cool']
 colours = cmap(np.linspace(0, 1, 5))
 labels = [
-    r"$10^5\ M_{\odot}$", 
-    r"$4 \times\ 10^5 M_{\odot}$", 
-    r"$10^6\ M_{\odot}$", 
-    r"$4 \times 10^6\ M_{\odot}$", 
-    r"$10^7\ M_{\odot}$"
+    r"$10^5\ {\rm M}_{\odot}$", 
+    r"$4 \times\ 10^5 {\rm M}_{\odot}$", 
+    r"$10^6\ {\rm M}_{\odot}$", 
+    r"$4 \times 10^6\ {\rm M}_{\odot}$", 
+    r"$10^7\ {\rm M}_{\odot}$"
 ]
 
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=(8, 6))
 ax.yaxis.set_ticks_position('both')
 ax.xaxis.set_ticks_position('both')
 ax.xaxis.set_minor_locator(mtick.AutoMinorLocator())
@@ -139,28 +138,17 @@ for i,mass in enumerate([1e5, 4e5, 1e6, 4e6, 1e7]):
         alpha = (27-19*g)/(6*(4-g))
         rate = 7.1*10**-1*(vdisp/(70 | units.kms))**3.5*(mass/(10**6 | units.MSun))**-alpha
         rate_arr.append(1e3 * rate)
-        rate_us.append(1e3 * our_formula(mass, 300 | units.kms, gamma=g))
+        rate_us.append(1e6 * our_formula(mass, 300 | units.kms, gamma=g))
     ax.plot(gamma, rate_arr, label=labels[i], color=colours[i])
     ax.plot(gamma, rate_us, linestyle="-.", color=colours[i])
     
-our_formula(SMBH_mass=1e7 | units.MSun, vkick=1000 | units.kms, gamma=1.75)
-TOP
 ax.set_xlabel(r"$\gamma$", fontsize=14)
 ax.set_ylabel(r"$\dot{N}$ [Myr$^{-1}$]", fontsize=14)
-ax.legend(fontsize=14, loc="lower right")
-ax.set_xlim(0.5,2.)
-ax.set_ylim(1e-2, rate_arr[-1])
+ax.legend(fontsize=14, loc="lower left")
 ax.set_yscale("log")
-plt.show()
-STOP
+ax.set_xlim(0.5,2.)
+ax.set_ylim(8, rate_arr[-1])
 plt.savefig(f"plot/figures/wang_plot.pdf", dpi=300, bbox_inches='tight')
-
-
-wang_2004(SMBH_mass=1e7 | units.MSun)
-wang_2004(SMBH_mass=1e5 | units.MSun)
-wang_2004(SMBH_mass=4e5 | units.MSun)
-our_formula(SMBH_mass=1e5 | units.MSun, vkick=300 | units.kms)
-STOP
 
 # MSMBH =  1e5,    4e5,   1e5,   4e5
 # vKICK =  300,    300,   600,   600

@@ -21,14 +21,14 @@ def sample_mass_from_PS_at_z(z, mass_range, press_schechter):
     m_min = mass_range[0].value_in(units.MSun)
     m_max = mass_range[-1].value_in(units.MSun)
     dm = m_max - m_min
-    mass_grid = np.linspace(m_min, m_max, 30000) | units.MSun
+    dm /= (30000 - 1)
+    mass_grid = np.linspace(m_min, m_max, 50000) | units.MSun
     
-    # Evaluate the PS function on this grid at the given redshift.
     ps_vals = press_schechter(z, mass_grid)
     ps_vals_unitless = ps_vals.value_in(units.Mpc**-3)
     
     cdf = np.cumsum(ps_vals_unitless) * dm
-    cdf /= cdf[-1]  # normalise so that CDF runs from 0 to 1
+    cdf /= cdf[-1]
     
     # Create an inverse CDF interpolator.
     inv_cdf = interp1d(cdf, mass_grid.value_in(units.MSun), kind='linear',
@@ -49,8 +49,9 @@ def sample_vkick_from_pdf(vkick_bins, pdf_vals):
     Returns:
         A vkick sample (in the same units as vkick_bins).
     """
+    bin_midpoints = 0.5 * (vkick_bins[:-1] + vkick_bins[1:])
     bin_widths = np.diff(vkick_bins)
-    bin_probs = pdf_vals(bin_widths)
+    bin_probs = pdf_vals(bin_midpoints) * bin_widths
     bin_probs /= bin_probs.sum()
     
     chosen_bin = np.random.choice(len(bin_probs), p=bin_probs)
@@ -75,10 +76,10 @@ def event_rate(z_range, M_range, kick_bins, IMBH_IMBH_merger, N_event, press_sch
         Event rate in [yr^-1] (AMUSE units).
     """
     z_min, z_max = z_range[0], z_range[-1]
-    z_samples = np.linspace(z_min, z_max, num_samples)
     
     integrand_values = np.zeros(num_samples)
-    for i, z in enumerate(z_samples):
+    for i in range(num_samples):
+        z = np.random.uniform(z_min, z_max)
         
         # Sample the galaxy mass
         M_gal = sample_mass_from_PS_at_z(z, M_range, press_schechter)
@@ -86,16 +87,18 @@ def event_rate(z_range, M_range, kick_bins, IMBH_IMBH_merger, N_event, press_sch
         # Sample the kick velocity
         v = sample_vkick_from_pdf(vkick_bins, kick_PDF) | units.kms
         v_esc = esc_velocity(haring_rix_relation(M_gal))
-        if v < v_esc: # Skip sample if kick velocity is below escape velocity.
-            continue  
+        #if v < v_esc: # Skip sample if kick velocity is below escape velocity.
+        #    continue  
         
         # Extract IMBH-IMBH merger rate and compute event count.
-        Rm = IMBH_IMBH_merger(z).value_in(units.yr**-1)
-        event_count = N_event(M_gal, v, GAMMA)
+        Rm = IMBH_IMBH_merger(z, z_min, None).value_in(units.yr**-1)
+        event_count = N_event(M_gal, v, GAMMA, z)
         
         integrand_values[i] = Rm * event_count
-    
-    integral_estimate = np.trapezoid(integrand_values, z_samples)
+        
+    avg_integrand = np.mean(integrand_values)
+    integral_estimate = avg_integrand * (z_max - z_min)
+    #integral_estimate = np.trapezoid(integrand_values, z_samples)
     if integral_estimate < 0:
         print("Negative integral estimate, setting to zero")
         integral_estimate = 0
@@ -103,53 +106,65 @@ def event_rate(z_range, M_range, kick_bins, IMBH_IMBH_merger, N_event, press_sch
     return integral_estimate | units.yr**-1
 
 def esc_velocity(Mass):
-    """Calculate galactic escape velocity. Default units in km/s."""
+    """Calculate galactic escape velocity assuming truncated isothermal sphere potential. Default units in km/s."""
     vdisp = 200 * (Mass/(1.66*10**8 | units.MSun))**(1/4.86) | units.kms
-    return 5 * vdisp
+    return 3 * vdisp
 
-def N_event(M, vkick, GAMMA):
+def look_back(z):
+    """Compute look-back time in Gyr."""
+    H0 = 67.4 | (units.kms/units.Mpc)
+    tH = (1/H0).value_in(units.yr)
+    OmegaM = 0.303
+    OmegaLambda = 0.697
+    Ez = np.sqrt(OmegaM * (1 + z)**3 + OmegaLambda)
+
+    look_back_time = integ.quad(lambda z: tH / ((1 + z) * Ez), 0, z)[0]
+    return look_back_time | units.yr
+
+def N_event(M, vkick, gamma, z):
     """Compute event rate from fit. Total events assuming exhausted after 20 Myr."""
     AVG_STAR_MASS = 2.43578679652 | units.MSun
-    
     SMBH_mass = haring_rix_relation(M)
-    Rtide = (0.844**2 * SMBH_mass/AVG_STAR_MASS)**(1./3.) | units.RSun
-    Rcluster = (8. * constants.G * SMBH_mass / vkick**2.)
-    vdisp = 200 * (SMBH_mass/(1.66*10**8 | units.MSun))**(1/4.86) | units.kms
-    rinfl = constants.G * SMBH_mass / vdisp**2
     
-    C_RR =  0.14 * (SMBH_mass / AVG_STAR_MASS)**((GAMMA-1)/0.56) * (vkick/vdisp)**(-0.3*(GAMMA-1))
-    ln_term = np.log(SMBH_mass / AVG_STAR_MASS) / np.log(Rcluster / Rtide)
-    f_bound = 11.6 * GAMMA**-1.75 * (constants.G * SMBH_mass / (rinfl*vkick**2))**(3-GAMMA)
-    kick_rcluster = (vkick / Rcluster)
+    vdisp = 200 * (SMBH_mass/(1.66 * 1e8 | units.MSun))**(1/4.86) | units.kms
+    rinfl = constants.G*SMBH_mass/(vdisp**2)
+    rkick = 8. * constants.G*SMBH_mass/vkick**2
+    rtide = (0.844**2 * SMBH_mass/AVG_STAR_MASS)**(1./3.) | units.RSun
     
-    Mcluster = f_bound * SMBH_mass
+    term1 = 0.14*(SMBH_mass/AVG_STAR_MASS)**(0.75*(gamma-1)) * (vkick/vdisp)**(-1.2*(gamma-1))
+    term2 = np.log(SMBH_mass/AVG_STAR_MASS) / np.log(rkick/rtide)
+    term3 = (vkick/rkick)
+    term4 = 11.6*gamma**-1.75 * (constants.G*SMBH_mass/(rinfl*vkick**2.))**(3.-gamma)
+    
+    Mcluster = term4 * SMBH_mass
     Ncluster = Mcluster / AVG_STAR_MASS
     frac_merger = 0.25
     Ncluster *= frac_merger
     
-    Nrate = 6e-6 * C_RR * ln_term * kick_rcluster * f_bound
+    Nrate = 0.2 * term1 * term2 * term3 * term4
     time_to_exhaust = Ncluster/Nrate
-    
+    look_back_time = look_back(z)
+    time_to_exhaust = min(time_to_exhaust, look_back_time)
     return Nrate * time_to_exhaust
 
-def IMBH_IMBH_mergers(z):
+def IMBH_IMBH_mergers(z, z_min, z_max):
     """IMBH-IMBH merger rate in [yr^-1] from arXiv:2412.15334."""
-    merger_rate = merger_rate_interp(z) | units.yr**-1 * (units.Gpc)**-3
-        
+    merger_rate_density = merger_rate_interp(z) | units.yr**-1 * (units.Gpc)**-3
+
+    # Cosmological parameters
     H0 = 67.4 | (units.kms/units.Mpc)
     OmegaM = 0.303
     OmegaLambda = 0.697
-    
-    # Using arXiv:9905116
-    Ez = np.sqrt(OmegaM * (1 + z)**3 + OmegaLambda)
-    DM = constants.c / (H0 * Ez)
 
-    # Integrate over comoving volume.
-    Da = DM/(1+z)
-    dV = 4 * np.pi * constants.c / H0 * (1+z)**2 * Da**2 / Ez
-    dN = merger_rate * dV  * (1+z)**-1
+    # Compute the comoving distance Dc from z_min to z.
+    integrand = lambda zprime: 1.0/np.sqrt(OmegaM*(1+zprime)**3 + OmegaLambda)
+    Dc = (constants.c / H0) * integ.quad(integrand, z_min, z)[0]
+    Ez = np.sqrt(OmegaM*(1+z)**3 + OmegaLambda)
     
-    return dN
+    dV_dz = 4 * np.pi * (constants.c / H0) * Dc**2 / Ez
+    dNdz = merger_rate_density * dV_dz * (1+z)**-1
+
+    return dNdz
 
 def haring_rix_relation(mass):
     """Haring-Rix relation (BH-Galactic Bulge mass)."""
@@ -161,16 +176,13 @@ def press_schechter(z, M):
     phi_star_val = phi_star_interp(z) | (units.Mpc**-3)
     mass_param = M / (M_star_interp(z) | units.MSun)
     alpha_param = alpha_interp(z)
-    
-    ps_val = phi_star_val * (mass_param)**(alpha_param) * np.exp(-mass_param)
-    return ps_val
+    dn_dM = phi_star_val * (mass_param)**(alpha_param) * np.exp(-mass_param)
+    return dn_dM
 
-# --- Plot and parameter definitions (unchanged) ---
+# --- Plot and parameter definitions ---
 TDE_FACTOR = 2/3
 GW_FACTOR = 1/3 * 0.1
-NSC_FRAC = 1.0
-ZETA = 1.0
-GAMMA = 1.75
+GAMMA = 1.
 
 plt.rcParams["font.family"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "cm"
@@ -200,6 +212,8 @@ phi_star_interp = interp1d(redshift_bins, phi_star, kind='linear', fill_value='e
 M_star_interp = interp1d(redshift_bins, M_norm, kind='linear', fill_value='extrapolate')
 alpha_interp = interp1d(redshift_bins, alpha_values, kind='linear', fill_value='extrapolate')
 
+redshift_bins = [0, 0.1, 0.5, 1.0, 2.0, 3.0, 4.0]
+
 merger_rate_zbins = [0, 0.75, 1.25, 2, 2.6, 4, 4.6]
 merger_rate = [  # in yr^-1 Gpc^-3
     [0.0006, 0.0007, 0.0037, 0.0020, 0.0055, 0.0000, 0.0025],
@@ -208,7 +222,7 @@ merger_rate = [  # in yr^-1 Gpc^-3
 
 galaxy_masses = [
     np.linspace(8.63e7, 3.15e8, 100) | units.MSun,
-    np.linspace(5.52e8, 3.41e12, 100) | units.MSun
+    np.linspace(5.52e8, 2.26380341e10, 100) | units.MSun
 ]
 all_galaxy_masses = galaxy_masses[-1]
 
@@ -242,7 +256,7 @@ for i, vkick in enumerate([Prob_Distr["Hot Kick CDF"], Prob_Distr["Cold Kick CDF
                         IMBH_IMBH_merger=IMBH_IMBH_mergers, 
                         N_event=N_event, 
                         press_schechter=press_schechter,
-                        num_samples=200000
+                        num_samples=100000
                         )
             Nevents += Nevent
             if i == 0:
@@ -250,16 +264,11 @@ for i, vkick in enumerate([Prob_Distr["Hot Kick CDF"], Prob_Distr["Cold Kick CDF
             else:
                 Nevents_cold[j].append(Nevents.value_in(units.yr**-1))
         
-        
-        
-from scipy.interpolate import PchipInterpolator
-import matplotlib.ticker as ticker
-
 
 z_range = np.linspace(0, 4, 50000)
 
-event_SMBH_hot = PchipInterpolator(redshift_bins[:-1], Nevents_hot[1])
-event_SMBH_cold = PchipInterpolator(redshift_bins[:-1], Nevents_cold[1])
+event_SMBH_hot = interp1d(redshift_bins[:-1], Nevents_hot[1], kind='linear', fill_value='extrapolate')
+event_SMBH_cold = interp1d(redshift_bins[:-1], Nevents_cold[1], kind='linear', fill_value='extrapolate')
 
 fig, ax = plt.subplots()
 ax.yaxis.set_ticks_position('both')
@@ -279,15 +288,15 @@ ax.set_xlabel(r"$z$", fontsize=14)
 ax.set_ylabel(r"$\Gamma_{<}$ [yr$^{-1}$]", fontsize=14)
 ax.set_yscale("log")
 ax.legend(fontsize=14)
-ax.set_yticks([10, 100])
-ax.set_yticklabels(['10', '1000'])
-ax.set_ylim(7, 1.25 * TDE_FACTOR * np.max(event_SMBH_hot(z_range)))
-plt.savefig("plot/figures/smbh_TDE_rate.pdf", bbox_inches="tight", dpi=300)
+ax.set_yticks([10, 100, 1000])
+ax.set_yticklabels(['10', '100', '1000'])
+ax.set_ylim(20, 1.25 * TDE_FACTOR * np.max(event_SMBH_hot(z_range)))
+plt.savefig(f"plot/figures/smbh_TDE_rate_Gamma{GAMMA}.pdf", bbox_inches="tight", dpi=300)
 plt.clf()
 
 
-event_IMBH_hot = PchipInterpolator(redshift_bins[:-1], Nevents_hot[0])
-event_IMBH_cold = PchipInterpolator(redshift_bins[:-1], Nevents_cold[0])
+event_IMBH_hot = interp1d(redshift_bins[:-1], Nevents_hot[0], kind='linear', fill_value='extrapolate')
+event_IMBH_cold = interp1d(redshift_bins[:-1], Nevents_cold[0], kind='linear', fill_value='extrapolate')
 
 fig, ax = plt.subplots()
 ax.yaxis.set_ticks_position('both')
@@ -306,8 +315,8 @@ ax.set_xlim(0, 4)
 ax.set_xlabel(r"$z$", fontsize=14)
 ax.set_ylabel(r"$\Gamma_{<}$ [yr$^{-1}$]", fontsize=14)
 ax.set_yscale("log")
-ax.set_yticks([1, 10])
-ax.set_yticklabels(['1', '10'])
-ax.set_ylim(0.7, 1.25 * TDE_FACTOR * np.max(event_IMBH_hot(z_range)))
+ax.set_yticks([1, 10, 100])
+ax.set_yticklabels(['1', '10', '100'])
+ax.set_ylim(0.7, 1.25 * TDE_FACTOR * np.max(event_IMBH_cold(z_range)))
 ax.legend(fontsize=14)
-plt.savefig("plot/figures/imbh_TDE_rate.pdf", bbox_inches="tight", dpi=300)
+plt.savefig(f"plot/figures/imbh_TDE_rate_Gamma{GAMMA}.pdf", bbox_inches="tight", dpi=300)
