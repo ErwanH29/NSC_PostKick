@@ -73,12 +73,14 @@ def komossa_2008(SMBH_mass, vdisp, vkick, rcluster):
     unbound_rate = 2*np.pi*constants.G*SMBH_mass*(density/AVG_STELLAR_MASS) * vkick**-1 * stellar_tide
     print(f"Unbound rate: MSMBH = {SMBH_mass.in_(units.MSun)}, vkick = {vkick.in_(units.kms)}, {unbound_rate.in_(1/units.kyr)}")
     
-def wang_2004(SMBH_mass):
+def wang_2004(SMBH_mass, gamma):
     """Extract TDE rate for NSC (unrecoiled)"""
-    alpha = (27-19*GAMMA)/(6*(4-GAMMA))
+    alpha = (27-19*gamma)/(6*(4-gamma))
     vdisp = 200 * (SMBH_mass/(1.66 * 10**8 | units.MSun))**(1/4.86) | units.kms
-    TDE_rate = 7.1*10**-1*(vdisp/(70 | units.kms))**3.5*(SMBH_mass/(10**6 | units.MSun))**-alpha | units.kyr**-1
-    print(f"Wang 2004 TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, {TDE_rate.in_(1/units.kyr)}")
+    #vdisp = 100 | units.kms
+    #vdisp = 200 * (SMBH_mass/(1.48 * 10**8 | units.MSun))**(1/4.65) | units.kms
+    TDE_rate = 7.1*10**-4*(vdisp/(70 | units.kms))**3.5*(SMBH_mass/(10**6 | units.MSun))**alpha | units.yr**-1
+    return TDE_rate
 
 def our_formula(SMBH_mass, vkick, gamma):
     vdisp = 200 * (SMBH_mass/(1.66 * 1e8 | units.MSun))**(1/4.86) | units.kms
@@ -89,14 +91,14 @@ def our_formula(SMBH_mass, vkick, gamma):
     
     term1 = 0.14*(SMBH_mass/AVG_STAR_MASS)**(0.75*(gamma-1)) * (vkick/vdisp)**(-1.2*(gamma-1))
     term2 = np.log(SMBH_mass/AVG_STAR_MASS) / np.log(rkick/rtide)
-    term3 = (vkick/rkick).value_in(units.yr**-1)
+    term3 = (vkick/rkick)
     term4 = 11.6*gamma**-1.75 * (constants.G*SMBH_mass/(rinfl*vkick**2.))**(3.-gamma)
     
     term_t = term1 * term2 * term3 * term4
     
     formula = (2e-1) * term_t # in kyr^-1
-    print(f"Our formula TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, g = {gamma}, vkick = {vkick.in_(units.kms)}, {formula}")
-    return formula #.value_in(units.kyr**-1)
+    #print(f"Our formula TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, g = {gamma}, vkick = {vkick.in_(units.kms)}, {formula.value_in(units.kyr**-1)}")
+    return formula.value_in(units.kyr**-1)
 
 import matplotlib.pyplot as plt
 import matplotlib
@@ -109,46 +111,70 @@ plt.rcParams["mathtext.fontset"] = "cm"
 cmap = matplotlib.colormaps['cool']
 colours = cmap(np.linspace(0, 1, 5))
 labels = [
-    r"$10^5\ {\rm M}_{\odot}$", 
-    r"$4 \times\ 10^5 {\rm M}_{\odot}$", 
-    r"$10^6\ {\rm M}_{\odot}$", 
-    r"$4 \times 10^6\ {\rm M}_{\odot}$", 
-    r"$10^7\ {\rm M}_{\odot}$"
+    r"$10^5\ {\rm M_{\odot}}$", 
+    r"$4 \times\ 10^5 {\rm M_{\odot}}$", 
+    r"$10^6\ {\rm M_{\odot}}$", 
+    r"$4 \times 10^6\ {\rm M_{\odot}}$", 
+    r"$10^7\ {\rm M_{\odot}}$"
 ]
+
+gamma = np.linspace(1, 2, 2000)
 
 fig, ax = plt.subplots(figsize=(8, 6))
 ax.yaxis.set_ticks_position('both')
 ax.xaxis.set_ticks_position('both')
 ax.xaxis.set_minor_locator(mtick.AutoMinorLocator())
 ax.yaxis.set_minor_locator(mtick.AutoMinorLocator())
+ax.fill_between(gamma, 1e1, 1e2, color="black", alpha=0.2)
+
+gamma = np.linspace(0.5, 2., 10000)
+min_diff = abs(gamma - 1.75).argmin()
+for i,mass in enumerate([1e5, 4e5, 1e6, 4e6, 1e7]):
+    mass = mass | units.MSun
+    vdisp = 200 * (mass/(1.66 * 10**8 | units.MSun))**(1/4.86) | units.kms
+    rate_300 = [ ]
+    for g in gamma:
+        rate = 1e3 * our_formula(mass, 300 | units.kms, gamma=g)
+        rate_300.append(rate)
+        
+    rate_300 = np.array(rate_300)
+    
+    int_1e2 = abs(rate_300 - 1e2).argmin()
+    int_1e1 = abs(rate_300 - 1e1).argmin()
+    
+    print(f"Mass: {mass}")
+    print(f"Us at Gamma = 1.75, {rate_300[min_diff]*1e-6}")
+    print(f"Intersection 1e2: {gamma[int_1e2]}")
+    print(f"Intersection 1e1: {gamma[int_1e1]}")
+    
+    gamma_1e2 = gamma[int_1e2]
+    gamma_1e1 = gamma[int_1e1]
+    
+    ax.scatter(gamma_1e2, rate_300[int_1e2], color=colours[i], zorder=2, s=15)
+    ax.scatter(gamma_1e1, rate_300[int_1e1], color=colours[i], zorder=2, s=15)
+    ax.plot(gamma, rate_300, color=colours[i], zorder=1, lw=2, label=labels[i])
+    
+ax.set_xlabel(r"$\gamma$", fontsize=14)
+ax.set_ylabel(r"$\dot{N}$ [Myr$^{-1}$]", fontsize=14)
+ax.legend(fontsize=14, loc="lower right")
+ax.set_xlim(1., 2.)
+ax.set_ylim(0.2, 1e4)
+ax.set_yscale("log")
+ax.legend(fontsize=14, loc="lower right")
 ax.tick_params(axis="y", which='both', 
                 direction="in", 
                 labelsize=14)
 ax.tick_params(axis="x", which='both', 
                 direction="in", 
                 labelsize=14)
+plt.savefig(f"wang_plot.pdf", dpi=300, bbox_inches='tight')
+plt.clf()
 
-gamma = np.linspace(0.5, 2., 100)
-for i,mass in enumerate([1e5, 4e5, 1e6, 4e6, 1e7]):
-    mass = mass | units.MSun
-    vdisp = 200 * (mass/(1.66 * 10**8 | units.MSun))**(1/4.86) | units.kms
-    rate_arr = [ ]
-    rate_us = [ ]
-    for g in gamma:
-        alpha = (27-19*g)/(6*(4-g))
-        rate = 7.1*10**-1*(vdisp/(70 | units.kms))**3.5*(mass/(10**6 | units.MSun))**-alpha
-        rate_arr.append(1e3 * rate)
-        rate_us.append(1e6 * our_formula(mass, 300 | units.kms, gamma=g))
-    ax.plot(gamma, rate_arr, label=labels[i], color=colours[i])
-    ax.plot(gamma, rate_us, linestyle="-.", color=colours[i])
-    
-ax.set_xlabel(r"$\gamma$", fontsize=14)
-ax.set_ylabel(r"$\dot{N}$ [Myr$^{-1}$]", fontsize=14)
-ax.legend(fontsize=14, loc="lower left")
-ax.set_yscale("log")
-ax.set_xlim(0.5,2.)
-ax.set_ylim(8, rate_arr[-1])
-plt.savefig(f"plot/figures/wang_plot.pdf", dpi=300, bbox_inches='tight')
+wang_2004(SMBH_mass=1e7 | units.MSun)
+wang_2004(SMBH_mass=1e5 | units.MSun)
+wang_2004(SMBH_mass=4e5 | units.MSun)
+our_formula(SMBH_mass=1e5 | units.MSun, vkick=300 | units.kms)
+STOP
 
 # MSMBH =  1e5,    4e5,   1e5,   4e5
 # vKICK =  300,    300,   600,   600

@@ -22,7 +22,7 @@ def sample_mass_from_PS_at_z(z, mass_range, press_schechter):
     m_max = mass_range[-1].value_in(units.MSun)
     dm = m_max - m_min
     dm /= (30000 - 1)
-    mass_grid = np.linspace(m_min, m_max, 50000) | units.MSun
+    mass_grid = np.linspace(m_min, m_max, 10000) | units.MSun
     
     ps_vals = press_schechter(z, mass_grid)
     ps_vals_unitless = ps_vals.value_in(units.Mpc**-3)
@@ -87,8 +87,8 @@ def event_rate(z_range, M_range, kick_bins, IMBH_IMBH_merger, N_event, press_sch
         # Sample the kick velocity
         v = sample_vkick_from_pdf(vkick_bins, kick_PDF) | units.kms
         v_esc = esc_velocity(haring_rix_relation(M_gal))
-        #if v < v_esc: # Skip sample if kick velocity is below escape velocity.
-        #    continue  
+        if v < v_esc: # Skip sample if kick velocity is below escape velocity.
+            continue  
         
         # Extract IMBH-IMBH merger rate and compute event count.
         Rm = IMBH_IMBH_merger(z, z_min, None).value_in(units.yr**-1)
@@ -182,7 +182,7 @@ def press_schechter(z, M):
 # --- Plot and parameter definitions ---
 TDE_FACTOR = 2/3
 GW_FACTOR = 1/3 * 0.1
-GAMMA = 1.
+GAMMA = 1.75
 
 plt.rcParams["font.family"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "cm"
@@ -256,7 +256,7 @@ for i, vkick in enumerate([Prob_Distr["Hot Kick CDF"], Prob_Distr["Cold Kick CDF
                         IMBH_IMBH_merger=IMBH_IMBH_mergers, 
                         N_event=N_event, 
                         press_schechter=press_schechter,
-                        num_samples=100000
+                        num_samples=5000
                         )
             Nevents += Nevent
             if i == 0:
@@ -269,6 +269,10 @@ z_range = np.linspace(0, 4, 50000)
 
 event_SMBH_hot = interp1d(redshift_bins[:-1], Nevents_hot[1], kind='linear', fill_value='extrapolate')
 event_SMBH_cold = interp1d(redshift_bins[:-1], Nevents_cold[1], kind='linear', fill_value='extrapolate')
+
+from scipy.interpolate import PchipInterpolator
+event_SMBH_hot = PchipInterpolator(redshift_bins[:-1], Nevents_hot[1])
+event_SMBH_cold = PchipInterpolator(redshift_bins[:-1], Nevents_cold[1])
 
 fig, ax = plt.subplots()
 ax.yaxis.set_ticks_position('both')
@@ -288,15 +292,17 @@ ax.set_xlabel(r"$z$", fontsize=14)
 ax.set_ylabel(r"$\Gamma_{<}$ [yr$^{-1}$]", fontsize=14)
 ax.set_yscale("log")
 ax.legend(fontsize=14)
-ax.set_yticks([10, 100, 1000])
-ax.set_yticklabels(['10', '100', '1000'])
-ax.set_ylim(20, 1.25 * TDE_FACTOR * np.max(event_SMBH_hot(z_range)))
-plt.savefig(f"plot/figures/smbh_TDE_rate_Gamma{GAMMA}.pdf", bbox_inches="tight", dpi=300)
+ax.set_yticks([1, 10, 100, 1000, 10000])
+ax.set_ylim(0.8, 1.25 * TDE_FACTOR * np.max(event_SMBH_hot(z_range)))
+plt.savefig(f"plot/figures/smbh_TDE_rate_Gamma{GAMMA}_PChip.pdf", bbox_inches="tight", dpi=300)
 plt.clf()
 
 
 event_IMBH_hot = interp1d(redshift_bins[:-1], Nevents_hot[0], kind='linear', fill_value='extrapolate')
 event_IMBH_cold = interp1d(redshift_bins[:-1], Nevents_cold[0], kind='linear', fill_value='extrapolate')
+
+event_IMBH_hot = PchipInterpolator(redshift_bins[:-1], Nevents_hot[0])
+event_IMBH_cold = PchipInterpolator(redshift_bins[:-1], Nevents_cold[0])
 
 fig, ax = plt.subplots()
 ax.yaxis.set_ticks_position('both')
@@ -315,8 +321,8 @@ ax.set_xlim(0, 4)
 ax.set_xlabel(r"$z$", fontsize=14)
 ax.set_ylabel(r"$\Gamma_{<}$ [yr$^{-1}$]", fontsize=14)
 ax.set_yscale("log")
-ax.set_yticks([1, 10, 100])
-ax.set_yticklabels(['1', '10', '100'])
-ax.set_ylim(0.7, 1.25 * TDE_FACTOR * np.max(event_IMBH_cold(z_range)))
+ax.set_yticks([0.1, 1, 10, 100])
+ax.set_yticklabels(['0.1', '1', '10', '100'])
+ax.set_ylim(0.03, 1.25 * TDE_FACTOR * np.max(event_IMBH_cold(z_range)))
 ax.legend(fontsize=14)
-plt.savefig(f"plot/figures/imbh_TDE_rate_Gamma{GAMMA}.pdf", bbox_inches="tight", dpi=300)
+plt.savefig(f"plot/figures/imbh_TDE_rate_Gamma{GAMMA}_PChip.pdf", bbox_inches="tight", dpi=300)
