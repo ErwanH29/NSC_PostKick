@@ -95,9 +95,6 @@ class NCSCPlotter(object):
     def ZAMS_radius(self,mass):
         log_mass = np.log10(mass.value_in(units.MSun))
         mass_sq = (mass.value_in(units.MSun))**2
-        0.08353 + lim65*log_mass
-        0.01291 + 0.2226*log_mass
-        0.1151 + 0.06267*log_mass
         r_zams = pow(mass.value_in(units.MSun), 1.25) * (0.1148 + 0.8604*mass_sq) / (0.04651 + mass_sq)
 
         return r_zams | units.RSun
