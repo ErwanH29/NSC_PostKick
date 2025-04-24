@@ -60,13 +60,6 @@ def handle_coll(parti, parti_in_enc, tcoll, dir_path, stellar_type):
     new_particle.position = com_pos
     new_particle.velocity = com_vel
     new_particle.coll_events = (p1.coll_events + p2.coll_events) + 1
-    
-    if max(stellar_type) > 13 | units.stellar_type:
-       new_particle.radius = (6.*constants.G*new_particle.mass)/(constants.c**2.)
-    elif max(stellar_type) > 10 | units.stellar_type:
-       new_particle.radius = max(parti_in_enc.radius)
-    else:
-       new_particle.radius = ZAMS_radius(new_particle.mass)
        
     new_particle.stellar_type = max(stellar_type)
     parti.add_particles(new_particle)
@@ -112,7 +105,7 @@ def ZAMS_radius(mass):
     r_zams = pow(mass.value_in(units.MSun), 1.25) \
             * (0.1148 + 0.8604*mass_sq) / (0.04651 + mass_sq)
     return r_zams | units.RSun
-  
+
 def stellar_tidal_radius(stars, SMBH_mass):
     """
     Define stellar particle radius
@@ -123,8 +116,34 @@ def stellar_tidal_radius(stars, SMBH_mass):
     Returns:
         radius (float):  Stellar particle radius
     """
-    r_zams = stars.radius * (0.844**2 * SMBH_mass/stars.mass)**(1./3.)
-    return r_zams
+    mass_sq = (stars.mass.value_in(units.MSun))**2.
+    r_zams = pow(stars.mass.value_in(units.MSun), 1.25) \
+                * (0.1148 + 0.8604*mass_sq) / (0.04651 + mass_sq)
+    r_tidal = r_zams * (0.844**2 * SMBH_mass/stars.mass)**(1./3.)
+    return r_tidal | units.RSun
+  
+def neutron_star_radius(mass):
+    """
+    Define neutron star radius using https://arxiv.org/abs/astro-ph/0002203
+    Args:
+        mass (float):  Mass of the neutron star
+    Returns:
+        radius (float):  Neutron star radius
+    """
+    return 11.5 * (mass/Mch)**(-1/3) | units.RSun
+
+def white_dwarf_radius(mass):
+    """
+    Define white dwarf radius using https://arxiv.org/abs/astro-ph/0401420
+    Args:
+        mass (float):  Mass of the neutron star
+    Returns:
+        radius (float):  Neutron star radius
+    """
+    return 0.0127 * (Mch/mass)**(1/3) * (1 - (mass/Mch)**(4/3))**(1/2) | units.RSun
+
+def black_hole_radius(mass):
+    return (6.*constants.G*mass)/(constants.c**2.)
   
 def GW_event_kick(particles, spin_a=None, spin_b=None):
     """
@@ -179,3 +198,5 @@ def GW_event_kick(particles, spin_a=None, spin_b=None):
     
     vkick = (1. + ecc) * (vm * ecc_perp + vperp * (np.cos(zeta * ecc_perp) + np.sin(zeta * ecc_perp)) ) # + vpara*ecc_par)
     return vkick
+  
+Mch = 1.44 | units.MSun

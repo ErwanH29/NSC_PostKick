@@ -4,25 +4,11 @@ import os
 import re
 
 from amuse.io.base import read_set_from_file
-from amuse.lab import constants, units, nbody_system
+from amuse.lab import units, nbody_system
 from src.evol import EvolveSystem
+from src.environment_functions import stellar_tidal_radius, black_hole_radius
+from src.environment_functions import neutron_star_radius, white_dwarf_radius
 
-
-def stellar_tidal_radius(stars, SMBH_mass):
-    """
-    Define stellar particle radius using Eqn 1 of arXiv:1105.4966
-        
-    Args:
-        stars (object):  Stellar particles
-        SMBH_mass (float):  Mass of the SMBH
-    Returns:
-        radius (float):  Stellar particle radius
-    """
-    mass_sq = (stars.mass.value_in(units.MSun))**2.
-    r_zams = pow(stars.mass.value_in(units.MSun), 1.25) \
-                * (0.1148 + 0.8604*mass_sq) / (0.04651 + mass_sq)
-    radius = r_zams * (0.844**2 * SMBH_mass/stars.mass)**(1./3.)
-    return radius | units.RSun
 
 def sort_files(path):
     sorted_files = sorted(glob.glob(path+"/*"), key=lambda x: [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', str(x))])
@@ -48,9 +34,16 @@ def run_code(file, eta, tend, config, run_no, resume):
     pset = read_set_from_file(file, "hdf5")
     SMBH = pset[pset.mass.argmax()]
     SMBH.stellar_type = 14 | units.stellar_type
-    compact_objects = pset.stellar_type > 13 | units.stellar_type
-    pset[compact_objects].radius = 3*(2*constants.G*pset[compact_objects].mass)/(constants.c**2)
-    pset[~compact_objects].radius = stellar_tidal_radius(pset[~compact_objects], SMBH.mass)
+    
+    bh_mask = pset.stellar_type > 13 | units.stellar_type
+    pset[bh_mask].radius = black_hole_radius(pset[bh_mask].mass)
+    
+    ns_mask = pset.stellar_type == 13 | units.stellar_type
+    pset[ns_mask].radius = neutron_star_radius(pset[ns_mask].mass)
+    
+    tde_mask = pset.stellar_type < 13 | units.stellar_type
+    pset[tde_mask].radius = stellar_tidal_radius(pset[tde_mask], SMBH.mass)
+    
     
     fname = f"config_{run_no}"
     output_dir = config.split("config")[0]
@@ -64,7 +57,7 @@ def run_code(file, eta, tend, config, run_no, resume):
 
 
 vkick = "300"
-mSMBH = "4e5"
+mSMBH = "1e5"
 Nimbh = 0
 run_no = 0
 suffix = "bound"
@@ -81,4 +74,4 @@ run_code(file=data_file,
          tend=tend, 
          config=output_dir,
          run_no=run_no,
-         resume=True)
+         resume=False)

@@ -284,6 +284,31 @@ class HyperbolicPlotter(object):
                 plt.savefig(f"plot/figures/{kick}kms_{SMBH_Mass}_Coll_Locs.pdf", dpi=300, bbox_inches="tight")
                 plt.clf()
                 plt.close()
+    
+    def plot_evolution(self):
+        
+        config = "data/hyperbolic_orbits/300kms_m1e5_config_0_merger1"
+        data_files = natsort.natsorted(glob.glob(f"{config}/*.hdf5"))
+        
+        fig, ax = plt.subplots()
+        for i, f in enumerate(data_files):
+            p = read_set_from_file(f, "hdf5")
+            p.move_to_center()
+            print(6*constants.G*p.mass/(constants.c**2)/p.radius)
+            STOP
+            p.c = i
+            ax.scatter(p.x.value_in(units.au), 
+                       p.y.value_in(units.au), 
+                       zorder=1, c="black")
+            if i == 100:
+                ax.scatter(p.x.value_in(units.au), 
+                           p.y.value_in(units.au), 
+                           marker="X", s=75, 
+                           zorder=2, c="red")
                 
+        plt.show()     
+        
+       
 plot = HyperbolicPlotter()
+plot.plot_evolution()
 plot.sma_ecc_hyperbolic_colls()

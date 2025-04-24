@@ -10,7 +10,8 @@ from amuse.lab import write_set_to_file
 from amuse.units import units
 
 from src.environment_functions import handle_coll, handle_supernova
-from src.environment_functions import stellar_tidal_radius, GW_event_kick
+from src.environment_functions import stellar_tidal_radius, white_dwarf_radius
+from src.environment_functions import GW_event_kick, black_hole_radius, neutron_star_radius
 
 class EvolveSystem(object):
     def __init__(self, parti, tend, eta, conv, 
@@ -64,7 +65,7 @@ class EvolveSystem(object):
         self.particles = self.init_pset
         self.grav_code = Ph4(self.conv, number_of_workers=self.no_workers)
         self.grav_code.particles.add_particles(self.particles)
-        self.grav_code.parameters.timestep_parameter = 2**-3
+        self.grav_code.parameters.timestep_parameter = 0.1
 
         self.grav_stopping = self.grav_code.stopping_conditions.collision_detection
         self.grav_stopping.enable()
@@ -75,11 +76,16 @@ class EvolveSystem(object):
                                     )
         self.chnl_from_locl = self.particles.new_channel_to(self.grav_code.particles)
         
+        # Only evolve stars
         self.stars = self.particles[self.particles.stellar_type < (10 | units.stellar_type)]
+        self.stars.relative_mass = self.stars.mass
+        self.stars.relative_age = self.resume_time + (100. | units.Myr)
+        
         self.stellar_code = SeBa()
         self.stellar_code.particles.add_particles(self.stars)
         self.stellar_stopping = self.stellar_code.stopping_conditions.supernova_detection
         self.stellar_stopping.enable()
+        
         self.star_channel = self.stellar_code.particles.new_channel_to(
                                 self.grav_code.particles, 
                                 attributes=["mass"], 
@@ -115,6 +121,8 @@ class EvolveSystem(object):
         for ci in range(len(self.grav_stopping.particles(0))):                
             self.chnl_from_grav.copy()
             
+            print(f"...Detection: Collision {ci+1}...")
+            print(f"Before: {len(self.particles)} and {len(self.grav_code.particles)}")
             colliders = self.grav_code.stopping_conditions.collision_detection.particles
             enc_particles_set = Particles(particles=[colliders(0), colliders(1)])
             stellar_type_arr = [ ]
@@ -124,24 +132,29 @@ class EvolveSystem(object):
 
             SMBH = self.particles[self.particles.mass.argmax()]
             distance = (enc_particles_set[0].position - enc_particles_set[1].position).length()
-            if max(stellar_type_arr) < 10 | units.stellar_type:  # Both below white dwarf
-                coll_a_radius = enc_particles_set[0].as_particle_in_set(self.stellar_code.particles).radius
-                coll_b_radius = enc_particles_set[1].as_particle_in_set(self.stellar_code.particles).radius
+            if max(stellar_type_arr) < 13 | units.stellar_type:  # Non-TDE collision
+                if stellar_type_arr[0] < 10 | units.stellar_type:  # Star --> use SeBa radius
+                    coll_a_radius = enc_particles_set[0].as_particle_in_set(self.stellar_code.particles).radius
+                else:  # Scale down collider to white dwarf radius
+                    coll_a_radius = white_dwarf_radius(enc_particles_set[0].mass)
+                    
+                if stellar_type_arr[1] < 10 | units.stellar_type:
+                    coll_b_radius = enc_particles_set[1].as_particle_in_set(self.stellar_code.particles).radius
+                else:
+                    coll_b_radius = white_dwarf_radius(enc_particles_set[1].mass)
 
+                # New star radius becomes SeBa given radius, or tidal radius
                 if distance <= (coll_a_radius + coll_b_radius):
                     print("Star-Star collision")
                     newp = self.process_merger(enc_particles_set, stellar_type_arr)
-                    self.stellar_code.particles.remove_particle(enc_particles_set[0])
-                    self.stellar_code.particles.remove_particle(enc_particles_set[1])
                     self.stellar_code.particles.add_particle(newp)
-
                     newp.radius = self.stellar_code.particles[-1].radius
                     newp.radius = stellar_tidal_radius(newp, self.particles.mass.max())
+                    
                     self.particles.synchronize_to(self.grav_code.particles)
 
-            elif min(stellar_type_arr) < 10 | units.stellar_type:  # One compact object - one star
-                if max(enc_particles_set.mass) < 0.75*SMBH.mass:  # Non-SMBH TDE
-
+            elif min(stellar_type_arr) < 13 | units.stellar_type:  # Compact object - Star
+                if max(enc_particles_set.mass) < 0.75*SMBH.mass and min(stellar_type_arr) < 10 | units.stellar_type:  # Non-SMBH TDE
                     st_idx = np.asarray(stellar_type_arr).argmin()
                     co_idx = np.asarray(stellar_type_arr).argmax()
 
@@ -149,31 +162,48 @@ class EvolveSystem(object):
                     radius = star.as_particle_in_set(self.stellar_code.particles).radius
                     radius *= (enc_particles_set[co_idx].mass/SMBH.mass)**(1./3.)
                     if distance < (radius + enc_particles_set[co_idx].radius):
-                        print("Non-SMBH collision")
                         newp = self.process_merger(enc_particles_set, stellar_type_arr)
-                        coll_a = enc_particles_set[0].as_particle_in_set(self.stellar_code.particles)
-                        coll_b = enc_particles_set[1].as_particle_in_set(self.stellar_code.particles)
-
-                        if coll_a is not None:
-                            self.stellar_code.particles.remove_particle(coll_a)
-                        if coll_b is not None:
-                            self.stellar_code.particles.remove_particle(coll_b)
-
+                        
+                        if max (stellar_type_arr) == 13 | units.stellar_type:
+                            print("NS - Star TDE")
+                            newp.radius = neutron_star_radius(newp.mass)
+                        else:
+                            print("BH - Star TDE")
+                            newp.radius = black_hole_radius(newp.mass)
                         self.particles.synchronize_to(self.grav_code.particles)
                         
-                else:  # SMBH TDE
-                    newp = self.process_merger(enc_particles_set, stellar_type_arr)
-                    coll_a = enc_particles_set[0].as_particle_in_set(self.stellar_code.particles)
-                    coll_b = enc_particles_set[1].as_particle_in_set(self.stellar_code.particles)
-                    if coll_a is not None:
-                        self.stellar_code.particles.remove_particle(coll_a)
-                    if coll_b is not None:
-                        self.stellar_code.particles.remove_particle(coll_b)
+                elif max(enc_particles_set.mass) < 0.75*SMBH.mass and min(stellar_type_arr) >= 10 | units.stellar_type:
+                    st_idx = np.asarray(stellar_type_arr).argmin()
+                    co_idx = np.asarray(stellar_type_arr).argmax()
                     
+                    white_dwarf = enc_particles_set[st_idx]
+                    radius = white_dwarf_radius(white_dwarf.mass)
+                    if distance < (radius + enc_particles_set[co_idx].radius):
+                        newp = self.process_merger(enc_particles_set, stellar_type_arr)
+                        if stellar_type_arr[st_idx] == 13 | units.stellar_type:
+                            print("WD - NS TDE")
+                            newp.radius = neutron_star_radius(newp.mass)
+                        else:
+                            print("WD - BH TDE")
+                            newp.radius = black_hole_radius(newp.mass)
+                        self.particles.synchronize_to(self.grav_code.particles)
+
+                else:  # SMBH TDE
+                    print("SMBH TDE")
+                    newp = self.process_merger(enc_particles_set, stellar_type_arr)
+                    newp.radius = black_hole_radius(newp.mass)
                     self.particles.synchronize_to(self.grav_code.particles)
 
-            else:  # GW event
+            elif max(stellar_type_arr) == 13 | units.stellar_type:  # NS - NS merger
+                print("NS - NS merger")
                 newp = self.process_merger(enc_particles_set, stellar_type_arr)
+                newp.radius = neutron_star_radius(newp.mass)
+                self.particles.synchronize_to(self.grav_code.particles)
+
+            else:  # GW event
+                print("GW Event")
+                newp = self.process_merger(enc_particles_set, stellar_type_arr)
+                newp.radius = black_hole_radius(newp.mass)
                 
                 bin_sys = enc_particles_set.copy()
                 bin_sys.move_to_center()
@@ -181,15 +211,14 @@ class EvolveSystem(object):
                 newp.velocity += recoil_kick
                 
                 print(f"Applied vkick: {recoil_kick.in_(units.kms)} ({recoil_kick.length().in_(units.kms)})")
-                
-                coll_a = enc_particles_set[0].as_particle_in_set(self.stellar_code.particles)
-                coll_b = enc_particles_set[1].as_particle_in_set(self.stellar_code.particles)
-                if coll_a is not None:
-                    self.stellar_code.particles.remove_particle(coll_a)
-                if coll_b is not None:
-                    self.stellar_code.particles.remove_particle(coll_b)
-                
                 self.particles.synchronize_to(self.grav_code.particles)
+                
+            coll_a = enc_particles_set[0].as_particle_in_set(self.stellar_code.particles)
+            coll_b = enc_particles_set[1].as_particle_in_set(self.stellar_code.particles)
+            if coll_a is not None:
+                self.stellar_code.particles.remove_particle(coll_a)
+            if coll_b is not None:
+                self.stellar_code.particles.remove_particle(coll_b)
 
     def run_code(self):
         
