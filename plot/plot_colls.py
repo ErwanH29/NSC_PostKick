@@ -993,12 +993,9 @@ for m in masses:
             rinfl = 3 | units.pc
         rinfl = (constants.G*m/(200*(m/(1.66*1e8 | units.MSun))**(1/4.86) | units.kms)**(2))
         factor += (200/v.value_in(units.kms))**(1-3.25) * (m.value_in(units.MSun)) ** (1-1.5)
-print(factor/10)
-#STOP
                         
 plot = NCSCPlotter()
 plot.plot_time_vs_coll()
-STOP
 plot.plot_spatial()
 plot.lag_rad()
 plot.plot_coll_traj()

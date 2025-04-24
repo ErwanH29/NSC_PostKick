@@ -123,6 +123,8 @@ class EvolveSystem(object):
             
             print(f"...Detection: Collision {ci+1}...")
             Ngrav = len(self.grav_code.particles)
+            Nlocal = len(self.particles)
+            print(f"Before: {Ngrav}, {Nlocal}")
             
             colliders = self.grav_code.stopping_conditions.collision_detection.particles
             enc_particles_set = Particles(particles=[colliders(0), colliders(1)])
@@ -151,7 +153,9 @@ class EvolveSystem(object):
                     self.stellar_code.particles.add_particle(newp)
                     newp.radius = self.stellar_code.particles[-1].radius
                     newp.radius = stellar_tidal_radius(newp, self.particles.mass.max())
+                    
                     self.grav_code.particles.add_particle(newp)
+                    #self.particles.synchronize_to(self.grav_code.particles)
 
             elif min(stellar_type_arr) < 13 | units.stellar_type:  # Compact object - Star
                 if max(enc_particles_set.mass) < 0.75*SMBH.mass and min(stellar_type_arr) < 10 | units.stellar_type:  # Non-SMBH TDE
@@ -172,6 +176,7 @@ class EvolveSystem(object):
                             newp.radius = black_hole_radius(newp.mass)
 
                         self.grav_code.particles.add_particle(newp)
+                        #self.particles.synchronize_to(self.grav_code.particles)
                         
                 elif max(enc_particles_set.mass) < 0.75*SMBH.mass and min(stellar_type_arr) >= 10 | units.stellar_type:
                     st_idx = np.asarray(stellar_type_arr).argmin()
@@ -189,6 +194,7 @@ class EvolveSystem(object):
                             newp.radius = black_hole_radius(newp.mass)
 
                         self.grav_code.particles.add_particle(newp)
+                        #self.particles.synchronize_to(self.grav_code.particles)
 
                 else:  # SMBH TDE
                     print("SMBH TDE")
@@ -196,6 +202,7 @@ class EvolveSystem(object):
                     newp.radius = black_hole_radius(newp.mass)
 
                     self.grav_code.particles.add_particle(newp)
+                    #self.particles.synchronize_to(self.grav_code.particles)
 
             elif max(stellar_type_arr) == 13 | units.stellar_type:  # NS - NS merger
                 print("NS - NS merger")
@@ -203,6 +210,7 @@ class EvolveSystem(object):
                 newp.radius = neutron_star_radius(newp.mass)
                 
                 self.grav_code.particles.add_particle(newp)
+                #self.particles.synchronize_to(self.grav_code.particles)
 
             else:  # GW event
                 print("GW Event")
@@ -216,8 +224,10 @@ class EvolveSystem(object):
                 
                 print(f"Applied vkick: {recoil_kick.in_(units.kms)} ({recoil_kick.length().in_(units.kms)})")
                 self.grav_code.particles.add_particle(newp)
+                #self.particles.synchronize_to(self.grav_code.particles)
 
             Ngrav_post = len(self.grav_code.particles)
+            Nlocal_post = len(self.particles)
             if Ngrav_post != Ngrav:
                 coll_a = enc_particles_set[0].as_particle_in_set(self.stellar_code.particles)
                 coll_b = enc_particles_set[1].as_particle_in_set(self.stellar_code.particles)
@@ -227,7 +237,7 @@ class EvolveSystem(object):
                     self.stellar_code.particles.remove_particle(coll_b)
                 self.grav_code.particles.remove_particle(colliders(1))
                 self.grav_code.particles.remove_particle(colliders(0))
-                self.particles.add_particle(newp)
+                print(f"After: {len(self.grav_code.particles)} and {len(self.particles)}")
 
     def run_code(self):
         

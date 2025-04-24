@@ -60,9 +60,7 @@ def handle_coll(parti, parti_in_enc, tcoll, dir_path, stellar_type):
     new_particle.position = com_pos
     new_particle.velocity = com_vel
     new_particle.coll_events = (p1.coll_events + p2.coll_events) + 1
-       
     new_particle.stellar_type = max(stellar_type)
-    parti.add_particles(new_particle)
     parti.remove_particles(parti_in_enc)
     
     return new_particle
