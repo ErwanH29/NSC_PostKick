@@ -170,18 +170,18 @@ class NCSCPlotter(object):
             AVG_STAR_MASS = 2.43578679652 | units.MSun
             rtide = (0.844**2 * MSMBH/AVG_STAR_MASS)**(1./3.) | units.RSun
             
-            term1 = 0.14*(MSMBH/AVG_STAR_MASS)**(0.75*(gamma-1)) * (VKICK/vdisp)**(-1.2*(gamma-1))
-            #term1 = 0.14 * (MSMBH/AVG_STAR_MASS)**((1-gamma)/3) * (rkick/rtide)**((gamma-1))
-            term2 = np.log(MSMBH/AVG_STAR_MASS) / np.log(rkick/rtide)
-            term3 = (VKICK/rkick)
-            term4 = 11.6*gamma**-1.75 * (constants.G*MSMBH/(rinfl*VKICK**2.))**(3.-gamma)
-            time = time | units.Myr
+            C_RR = 0.14 * (MSMBH/AVG_STAR_MASS)**(0.75*(gamma-1)) * (VKICK/vdisp)**(-1.2*(gamma-1)) # Try -2.67 --> \propto v^-2
+            ln_term = np.log(MSMBH/AVG_STAR_MASS) / np.log(rkick/rtide)
+            t_scale = VKICK/rkick
+            fbound = 11.6*gamma**-1.75 * (constants.G*MSMBH/(rinfl*VKICK**2.))**(3.-gamma)
             
-            term_t = term1 * term2 * term3 * term4
+            term_t = C_RR * ln_term * t_scale * fbound
             term_t = term_t.value_in(units.Myr**-1)
-            time = time.value_in(units.Myr)
             
             formula = (coeff) * term_t  * time
+            print(f"CRR={C_RR}, Ln={ln_term}, t_scale={t_scale.in_(units.Myr**-1)}, fbound={fbound}")
+            print(f"In 0.1 Myr --> {coeff*C_RR*ln_term*t_scale.value_in(units.Myr**-1)*fbound*0.1}")
+            print("Therefore coefficient is in Myr")
             
             return formula
         
@@ -233,10 +233,10 @@ class NCSCPlotter(object):
                             type_a = int(lines[5].split("<")[1].split("- ")[0])
                             type_b = int(lines[5].split("<")[2].split("- ")[0])
                             
-                            #if mass_a > 1000 | units.MSun or mass_b > 1000 | units.MSun:
-                            #    NSMBH += 1
-                            #else:
-                            #    continue
+                            if mass_a > 1000 | units.MSun or mass_b > 1000 | units.MSun:
+                                NSMBH += 1
+                            else:
+                                continue
                             
                             idx = int(tcoll/TIME_PER_BIN)
                             coll_events_df[idx:] += 1
@@ -299,8 +299,6 @@ class NCSCPlotter(object):
             tde_smbh_events_arr.append([median_tde_smbh, IQRH_tde_smbh, IQRL_tde_smbh])
             ss_events_arr.append([median_ss, IQRH_ss, IQL_ss])
             
-            print(run, NSMBH/iter)
-            
         data_labels = [
             r"$N_{\rm coll}$", 
             r"$N_{\rm GW}$", 
@@ -356,7 +354,7 @@ class NCSCPlotter(object):
             #ax.xaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
             #ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
             ax.set_xlim(1.e-5, 0.1)
-            ax.set_ylim(1, 3*data_array[3][label][1][-1])
+            ax.set_ylim(1, 100)
             ax.set_yscale("log")
             plt.savefig(f"plot/figures/Ncoll_vs_time_{config_name[label]}.pdf", dpi=300, bbox_inches='tight')
             plt.clf()
@@ -389,11 +387,9 @@ class NCSCPlotter(object):
             else:
                 VKICK = 600 | units.kms
             
-            if label == 2:
-                params, covariance = curve_fit(custom_function, time_smoothed[time_smoothed<0.075], median_smoothed[time_smoothed<0.075], p0=[1], maxfev=10000)
-            else:
-                params, covariance = curve_fit(custom_function, time_smoothed, median_smoothed, p0=[1], maxfev=10000)
-            
+            params, covariance = curve_fit(custom_function, time_smoothed, median_smoothed, p0=[1], maxfev=10000)
+            print(config_name[label], params)
+            print(f"===="*30)
             y_fit = custom_function(x_fit, *params)
             ax.plot(x_fit, y_fit, color="black", lw=0.29)
             ax.plot(time_smoothed, median_smoothed,
@@ -719,139 +715,6 @@ class NCSCPlotter(object):
         plt.close()
         plt.clf()
         
-    def plot_spatial(self):
-        def extract_peri_coll(config):
-            """Extract orbital parameters at collision"""
-            coll_id_array = [ ]
-            for run in config:
-                data_files = natsort.natsorted(glob.glob(f"{run}/*"))
-                colliders_id_df = [ ]
-                
-                for file in data_files:
-                    with open(file, 'rb') as df:
-                        lines = [x.decode('utf8').strip() for x in df.readlines()]
-                        key_a = int(lines[1].split("[")[-1].split("]")[0])
-                        key_b = int(lines[2].split("[")[-1].split("]")[0])
-                        mass_a = float(lines[3].split("[")[1].split("]")[0]) | units.MSun
-                        mass_b = float(lines[4].split("[")[1].split("]")[0]) | units.MSun
-                        
-                        if mass_a > mass_b:
-                            colliders_id_df.append(key_b)
-                        else:
-                            colliders_id_df.append(key_a)
-                
-                coll_id_array.append(colliders_id_df)
-                            
-            return coll_id_array
-        
-        def power_law(x, a, b):
-            return a*x**b
-        
-        m4e5_300kms_snaps = self.extract_folder("4e5", 300, "simulation_snapshot")[2]
-        m4e5_300kms_colls = self.extract_folder("4e5", 300, "coll_orbital")[2]
-        coll_id_4e5 = extract_peri_coll([m4e5_300kms_colls])
-        
-        snaps = natsort.natsorted(glob.glob(f"{m4e5_300kms_snaps}/*"))
-        
-        minor_to_major = [ ]
-        inter_to_major = [ ]
-        for snap in snaps:
-            particles = read_set_from_file(snap, format="amuse")
-            SMBH = particles[particles.mass.argmax()]
-            particles.position -= SMBH.position
-            positions = particles.position.lengths().value_in(units.pc)
-            particles -= particles[positions > (0.04)]
-            particles -= SMBH
-            
-            inertia_tensor = np.cov(particles.position.value_in(units.pc).T)
-            eigen_val, eigen_vec = np.linalg.eig(inertia_tensor)
-            
-            a2, b2, c2 = sorted(eigen_val, reverse=True)
-            minor_to_major.append(np.sqrt(c2/a2))
-            inter_to_major.append(np.sqrt(b2/a2))
-        
-        time = [1e-4*i for i in range(len(inter_to_major))]
-        
-        fig, ax = plt.subplots()
-        ax.plot(time, minor_to_major, label=r"$c/a$")
-        ax.plot(time, inter_to_major, label=r"$b/a$")
-        ax.set_xlabel(r"$t$ [Myr]", fontsize=self.AXLABEL_SIZE)
-        ax.set_ylabel(r"Axis Ratio", fontsize=self.AXLABEL_SIZE)
-        ax.set_ylim(0,1)
-        ax.set_xlim(0,0.1)
-        self.tickers(ax, "plot", False)
-        ax.legend(fontsize=self.TICK_SIZE)
-        plt.show()
-        STOP   
-            
-        
-        from amuse.community.ph4.interface import ph4
-        from amuse.lab import nbody_system
-        from scipy.interpolate import griddata
-        import matplotlib.colors as mcolors
-        converter = nbody_system.nbody_to_si(1e5 | units.MSun, 0.1 | units.pc)
-        code = ph4(converter)
-        lim = 0.01
-        min = 8e-7
-        max = 1  # Linear Normalization
-        for snap in snaps:
-            particles = read_set_from_file(snap, format="amuse")
-            SMBH = particles[particles.mass.argmax()]
-            particles.position -= SMBH.position
-            particles -= SMBH
-            
-            distances = particles.position.lengths().value_in(units.pc)
-            
-            fig, ax = plt.subplots()
-            n1, bins, patches = ax.hist(distances, 500)
-            ax.clear()
-            bin_centers = (bins[:-1] + bins[1:]) / 2
-            params, covariance = curve_fit(power_law, bin_centers[bin_centers>0.01], n1[bin_centers>0.01])
-            x_sorted = np.linspace(1e-2, distances.max(), 100)
-            y_fit = power_law(x_sorted, *params)
-            print(params)
-            
-            fig, ax = plt.subplots()
-            ax.set_ylabel(r'$\rho/\rho_{\rm{max}}$', fontsize=self.AXLABEL_SIZE)
-            ax.set_xlabel(r'$v_{ejec}$ [km s$^{-1}$]', fontsize=self.AXLABEL_SIZE)
-            #ax.plot(x_sorted, y_sorted, color="black", ls="--")
-            ax.plot(x_sorted, y_fit, color="black", ls="--")
-            n, bins, patches = ax.hist(distances, 20, histtype='step', weights=[1/n1.max()]*len(particles))
-            n, bins, patches = ax.hist(distances, 20, weights=[1/n1.max()]*len(particles))
-            plt.show()
-            plt.savefig(fname_hist, dpi = 300, bbox_inches='tight')
-            plt.clf()
-            
-        for snap in snaps:
-            particles = read_set_from_file(snap, format="amuse")
-            SMBH = particles[particles.mass.argmax()]
-            particles.position -= SMBH.position
-            
-            code.particles.add_particles(particles)
-            pots = abs(code.get_potential_at_point(0*particles.radius, particles.x, particles.y, particles.z).value_in(units.ms**2))
-            pots /= np.max(pots)
-            print(pots)
-            norm = mcolors.Normalize(vmin=min, vmax=max)
-            
-            grid_x, grid_y = np.mgrid[-lim:lim:500j, -lim:lim:500j]
-            grid_z = griddata((particles.x.value_in(units.pc), particles.y.value_in(units.pc)), pots, (grid_x, grid_y), method="nearest")
-            
-            fig, ax = plt.subplots(figsize=(6, 6))
-            ax.set_xlabel(r"$x$ [pc]", fontsize=self.AXLABEL_SIZE)
-            ax.set_ylabel(r"$y$ [pc]", fontsize=self.AXLABEL_SIZE)
-            ax.imshow(grid_z.T, extent=(-lim, lim, -lim, lim), origin="lower", cmap="viridis", norm=norm)
-            #ax.scatter(particles.x.value_in(units.pc), particles.y.value_in(units.pc), s=1)
-            #ax.scatter(SMBH.x.value_in(units.pc), SMBH.y.value_in(units.pc), s=10, color="red")
-            #for ID in coll_id_4e5[0]:
-            #    p = particles[particles.key == ID]
-            #    ax.scatter(p.x.value_in(units.pc), p.y.value_in(units.pc), s=3, color="black")
-            ax.set_xlim(-lim, lim)
-            ax.set_ylim(-lim, lim)
-            plt.savefig(f"temp/spatial_{snap.split('/')[-1].split('.')[0]}.png", dpi=250, bbox_inches='tight')
-            plt.clf()
-            plt.close()
-            code.particles.remove_particles(particles)
-        
     def plot_coll_traj(self):
         """Plot collision trajectory of a specific run"""
         
@@ -923,62 +786,6 @@ class NCSCPlotter(object):
             plt.savefig(f"plot/figures/coll_traj_{ID}.png", dpi=250, bbox_inches='tight')
             plt.close()
             plt.clf()
-            
-    def lag_rad(self):
-        """Plot collision trajectory of a specific run"""
-        
-        run_idx = 2
-        m4e5_300kms_snaps = self.extract_folder("4e5", 300, "simulation_snapshot")
-        m4e5_300kms_colls = self.extract_folder("4e5", 300, "coll_orbital")[run_idx]
-        data_files = natsort.natsorted(glob.glob(f"{m4e5_300kms_colls}/*"))
-        
-        colliders_id_array = [ ]
-        for file in data_files:
-            with open(file, 'rb') as df:
-                lines = [x.decode('utf8').strip() for x in df.readlines()]
-                key_a = int(lines[1].split("[")[-1].split("]")[0])
-                key_b = int(lines[2].split("[")[-1].split("]")[0])
-                mass_a = float(lines[3].split("[")[1].split("]")[0]) | units.MSun
-                mass_b = float(lines[4].split("[")[1].split("]")[0]) | units.MSun
-                
-                if mass_a > mass_b:
-                    colliders_id_array.append(key_b)
-                else:
-                    colliders_id_array.append(key_a)
-                    
-        rh_arr = [ ]
-        rh_coll = [ ]
-        for j, run in enumerate(m4e5_300kms_snaps):
-            data_files = natsort.natsorted(glob.glob(f"{run}/*"))
-            
-            if j == run_idx:
-                for k, dt in enumerate(data_files):
-                    print(f"Progress: {100*(k/len(data_files))}%", end="\r", flush=True)
-                    pset = read_set_from_file(dt, format="amuse")
-                    SMBH = pset[pset.mass.argmax()]
-                    pset -= SMBH
-                    
-                    other = Particles()
-                    for ID in colliders_id_array:
-                        target_minor = pset[pset.key == ID]
-                        if (target_minor):
-                            other.add_particle(target_minor)
-                    
-                    if len(other) > 0:
-                        rh_coll.append(LagrangianRadii(other)[6].value_in(units.pc))
-                    
-                    positions = pset.position.lengths().value_in(units.pc)
-                    pset -= pset[positions > 2]
-                    
-                    lag_rad = LagrangianRadii(pset)[6]
-                    rh_arr.append(lag_rad.value_in(units.pc))
-        
-        rk = constants.G*(4e5 | units.MSun)/(300 | units.kms)**2
-        time = [1e-4*i for i in range(len(rh_arr))]
-        plt.plot(time, rh_arr)
-        plt.plot(time, rh_coll)
-        plt.axhline(rk.value_in(units.pc), color="black", ls="--")
-        plt.show()
               
               
 vk = [500, 1000, 2000, 3000, 4000] | units.kms
@@ -996,8 +803,3 @@ for m in masses:
                         
 plot = NCSCPlotter()
 plot.plot_time_vs_coll()
-plot.plot_spatial()
-plot.lag_rad()
-plot.plot_coll_traj()
-plot.dperi_colls()
-plot.sma_ecc_traj_colls()
