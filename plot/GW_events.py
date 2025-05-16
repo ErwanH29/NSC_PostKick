@@ -315,6 +315,7 @@ class NCSCPlotter(object):
         """Plot frequency vs. strain of GW events"""
         
         m4e5_300kms_colls = self.extract_folder("4e5", 300, "coll_orbital")
+        m4e5_600kms_colls = self.extract_folder("4e5", 600, "coll_orbital")
         
         sma_array = {
             "EMRI": [],
@@ -353,76 +354,77 @@ class NCSCPlotter(object):
             "WD-WD": []
         }
         
-        for run in m4e5_300kms_colls:
-            data_files = natsort.natsorted(glob.glob(f"{run}/*"))
-            for file in data_files:
-                with open(file, 'rb') as df:
-                    lines = [x.decode('utf8').strip() for x in df.readlines()]
-                    mass_a = float(lines[3].split("[")[1].split("]")[0]) | units.MSun
-                    mass_b = float(lines[4].split("[")[1].split("]")[0]) | units.MSun
-                    type_a = int(lines[5].split("quantity<")[1].split("-")[0])
-                    type_b = int(lines[5].split("quantity<")[2].split("-")[0])
-                    
-                    if type_a == 14:
-                        coll_rad = black_hole_radius(mass_a)
-                    elif type_a == 13:
-                        coll_rad = neutron_star_radius(mass_a)
-                    elif type_a > 9:
-                        coll_rad = white_dwarf_radius(mass_a)
-                    if type_b == 14:
-                        coll_rad += black_hole_radius(mass_b)
-                    elif type_b == 13:
-                        coll_rad += neutron_star_radius(mass_b)
-                    elif type_b > 9:
-                        coll_rad += white_dwarf_radius(mass_b)
-                    
-                    if type_a > 10 and type_b > 10:
-                        sma = float(lines[6].split(": ")[1][:-3]) | units.au
-                        ecc = float(lines[7].split(": ")[1])
-                          
-                        if max(mass_a, mass_b) > 1e4 | units.MSun:
-                            sma_array["EMRI"].append(sma)
-                            ecc_array["EMRI"].append(ecc)
-                            mass_array["EMRI"].append([mass_a, mass_b])
-                            rad_array["EMRI"].append(coll_rad)
-                            
-                        elif type_a == 14 and type_b == 14:
-                                sma_array["BH-BH"].append(sma)
-                                ecc_array["BH-BH"].append(ecc)
-                                mass_array["BH-BH"].append([mass_a, mass_b])
-                                rad_array["BH-BH"].append(coll_rad)
+        for config in [m4e5_300kms_colls, m4e5_600kms_colls]:
+            for run in config:
+                data_files = natsort.natsorted(glob.glob(f"{run}/*"))
+                for file in data_files:
+                    with open(file, 'rb') as df:
+                        lines = [x.decode('utf8').strip() for x in df.readlines()]
+                        mass_a = float(lines[3].split("[")[1].split("]")[0]) | units.MSun
+                        mass_b = float(lines[4].split("[")[1].split("]")[0]) | units.MSun
+                        type_a = int(lines[5].split("quantity<")[1].split("-")[0])
+                        type_b = int(lines[5].split("quantity<")[2].split("-")[0])
                         
+                        if type_a == 14:
+                            coll_rad = black_hole_radius(mass_a)
                         elif type_a == 13:
-                            if type_b == 14:
-                                sma_array["NS-BH"].append(sma)
-                                ecc_array["NS-BH"].append(ecc)
-                                mass_array["NS-BH"].append([mass_a, mass_b])
-                                rad_array["NS-BH"].append(coll_rad)
-                            elif type_b == 13:
-                                sma_array["NS-NS"].append(sma)
-                                ecc_array["NS-NS"].append(ecc)
-                                mass_array["NS-NS"].append([mass_a, mass_b])
-                                rad_array["NS-NS"].append(coll_rad)
+                            coll_rad = neutron_star_radius(mass_a)
+                        elif type_a > 9:
+                            coll_rad = white_dwarf_radius(mass_a)
+                        if type_b == 14:
+                            coll_rad += black_hole_radius(mass_b)
+                        elif type_b == 13:
+                            coll_rad += neutron_star_radius(mass_b)
+                        elif type_b > 9:
+                            coll_rad += white_dwarf_radius(mass_b)
+                        
+                        if type_a > 10 and type_b > 10:
+                            sma = float(lines[6].split(": ")[1][:-3]) | units.au
+                            ecc = float(lines[7].split(": ")[1])
+                            
+                            if max(mass_a, mass_b) > 1e4 | units.MSun:
+                                sma_array["EMRI"].append(sma)
+                                ecc_array["EMRI"].append(ecc)
+                                mass_array["EMRI"].append([mass_a, mass_b])
+                                rad_array["EMRI"].append(coll_rad)
+                                
+                            elif type_a == 14 and type_b == 14:
+                                    sma_array["BH-BH"].append(sma)
+                                    ecc_array["BH-BH"].append(ecc)
+                                    mass_array["BH-BH"].append([mass_a, mass_b])
+                                    rad_array["BH-BH"].append(coll_rad)
+                            
+                            elif type_a == 13:
+                                if type_b == 14:
+                                    sma_array["NS-BH"].append(sma)
+                                    ecc_array["NS-BH"].append(ecc)
+                                    mass_array["NS-BH"].append([mass_a, mass_b])
+                                    rad_array["NS-BH"].append(coll_rad)
+                                elif type_b == 13:
+                                    sma_array["NS-NS"].append(sma)
+                                    ecc_array["NS-NS"].append(ecc)
+                                    mass_array["NS-NS"].append([mass_a, mass_b])
+                                    rad_array["NS-NS"].append(coll_rad)
+                                else:
+                                    continue  # WD with stellar-mass object is not GW event
+                                    sma_array["NS-WD"].append(sma)
+                                    ecc_array["NS-WD"].append(ecc)
+                                    mass_array["NS-WD"].append([mass_a, mass_b])
+                            
                             else:
                                 continue  # WD with stellar-mass object is not GW event
-                                sma_array["NS-WD"].append(sma)
-                                ecc_array["NS-WD"].append(ecc)
-                                mass_array["NS-WD"].append([mass_a, mass_b])
-                        
-                        else:
-                            continue  # WD with stellar-mass object is not GW event
-                            if type_b == 14:
-                                sma_array["BH-WD"].append(sma)
-                                ecc_array["BH-WD"].append(ecc)
-                                mass_array["BH-WD"].append([mass_a, mass_b])
-                            elif type_b == 13:
-                                sma_array["NS-WD"].append(sma)
-                                ecc_array["NS-WD"].append(ecc)
-                                mass_array["NS-WD"].append([mass_a, mass_b])
-                            else:
-                                sma_array["WD-WD"].append(sma)
-                                ecc_array["WD-WD"].append(ecc)
-                                mass_array["WD-WD"].append([mass_a, mass_b])
+                                if type_b == 14:
+                                    sma_array["BH-WD"].append(sma)
+                                    ecc_array["BH-WD"].append(ecc)
+                                    mass_array["BH-WD"].append([mass_a, mass_b])
+                                elif type_b == 13:
+                                    sma_array["NS-WD"].append(sma)
+                                    ecc_array["NS-WD"].append(ecc)
+                                    mass_array["NS-WD"].append([mass_a, mass_b])
+                                else:
+                                    sma_array["WD-WD"].append(sma)
+                                    ecc_array["WD-WD"].append(ecc)
+                                    mass_array["WD-WD"].append([mass_a, mass_b])
         
         freq_array = {key: [] for key in sma_array.keys()}
         strain_array = {key: [] for key in sma_array.keys()}
