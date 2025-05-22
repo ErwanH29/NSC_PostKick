@@ -89,16 +89,15 @@ def our_formula(SMBH_mass, vkick, gamma):
     AVG_STAR_MASS = 2.43578679652 | units.MSun
     rtide = (0.844**2 * SMBH_mass/AVG_STAR_MASS)**(1./3.) | units.RSun
     
-    term1 = 0.14*(SMBH_mass/AVG_STAR_MASS)**(0.75*(gamma-1)) * (vkick/vdisp)**(-1.2*(gamma-1))
+    term1 = 0.14*(SMBH_mass/AVG_STAR_MASS)**((2./3.) * (gamma-1)) * (vkick/vdisp)**(-(4./3.) * (gamma-1))
     term2 = np.log(SMBH_mass/AVG_STAR_MASS) / np.log(rkick/rtide)
-    term3 = (vkick/rkick)
+    term3 = (vkick/rkick).value_in(units.Myr**-1)
     term4 = 11.6*gamma**-1.75 * (constants.G*SMBH_mass/(rinfl*vkick**2.))**(3.-gamma)
     
     term_t = term1 * term2 * term3 * term4
-    
-    formula = (2e-1) * term_t # in kyr^-1
+    formula = 0.7 * term_t # in 1/Myr
     #print(f"Our formula TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, g = {gamma}, vkick = {vkick.in_(units.kms)}, {formula.value_in(units.kyr**-1)}")
-    return formula.value_in(units.kyr**-1)
+    return formula
 
 import matplotlib.pyplot as plt
 import matplotlib
@@ -134,8 +133,12 @@ for i,mass in enumerate([1e5, 4e5, 1e6, 4e6, 1e7]):
     vdisp = 200 * (mass/(1.66 * 10**8 | units.MSun))**(1/4.86) | units.kms
     rate_300 = [ ]
     for g in gamma:
-        rate = 1e3 * our_formula(mass, 300 | units.kms, gamma=g)
+        rate = our_formula(mass, 300 | units.kms, gamma=g)
         rate_300.append(rate)
+        if abs(g - 1.75) < 0.00008:
+            print(mass.value_in(units.MSun)/10**5, g, rate)
+        elif abs(g - 1.0) < 0.00008:
+            print(mass.value_in(units.MSun)/10**5, g, rate)
         
     rate_300 = np.array(rate_300)
     
@@ -154,7 +157,7 @@ for i,mass in enumerate([1e5, 4e5, 1e6, 4e6, 1e7]):
     ax.scatter(gamma_1e1, rate_300[int_1e1], color=colours[i], zorder=2, s=15)
     ax.plot(gamma, rate_300, color=colours[i], zorder=1, lw=2, label=labels[i])
     
-ax.set_xlabel(r"$\gamma$", fontsize=14)
+ax.set_xlabel(r"$\gamma$", fontsize=14)#
 ax.set_ylabel(r"$\dot{N}$ [Myr$^{-1}$]", fontsize=14)
 ax.legend(fontsize=14, loc="lower right")
 ax.set_xlim(1., 2.)
@@ -167,14 +170,14 @@ ax.tick_params(axis="y", which='both',
 ax.tick_params(axis="x", which='both', 
                 direction="in", 
                 labelsize=14)
-plt.savefig(f"wang_plot.pdf", dpi=300, bbox_inches='tight')
+plt.savefig(f"plot/figures/wang_plot.pdf", dpi=300, bbox_inches='tight')
 plt.clf()
+STOP
 
 wang_2004(SMBH_mass=1e7 | units.MSun)
 wang_2004(SMBH_mass=1e5 | units.MSun)
 wang_2004(SMBH_mass=4e5 | units.MSun)
 our_formula(SMBH_mass=1e5 | units.MSun, vkick=300 | units.kms)
-STOP
 
 # MSMBH =  1e5,    4e5,   1e5,   4e5
 # vKICK =  300,    300,   600,   600

@@ -18,11 +18,13 @@ def sample_mass_from_PS_at_z(z, mass_range, press_schechter):
     Returns:
         A single mass (with AMUSE units) sampled according to the Press–Schechter distribution.
     """
+    Ngrid = 5*10**4
+    
     m_min = mass_range[0].value_in(units.MSun)
     m_max = mass_range[-1].value_in(units.MSun)
     dm = m_max - m_min
-    dm /= (30000 - 1)
-    mass_grid = np.linspace(m_min, m_max, 10000) | units.MSun
+    dm /= (Ngrid - 1)
+    mass_grid = np.linspace(m_min, m_max, Ngrid) | units.MSun
     
     ps_vals = press_schechter(z, mass_grid)
     ps_vals_unitless = ps_vals.value_in(units.Mpc**-3)
@@ -49,7 +51,6 @@ def sample_vkick_from_pdf(vkick_bins, pdf_vals):
     Returns:
         A vkick sample (in the same units as vkick_bins).
     """
-    bin_midpoints = 0.5 * (vkick_bins[:-1] + vkick_bins[1:])
     bin_widths = np.diff(vkick_bins)
     bin_probs = pdf_vals(bin_midpoints) * bin_widths
     bin_probs /= bin_probs.sum()
@@ -58,7 +59,7 @@ def sample_vkick_from_pdf(vkick_bins, pdf_vals):
     vkick_sample = np.random.uniform(vkick_bins[chosen_bin], vkick_bins[chosen_bin+1])
     return vkick_sample
 
-def event_rate(z_range, M_range, kick_bins, IMBH_IMBH_merger, N_event, press_schechter, num_samples=100):
+def event_rate(z_range, M_range, gamma, IMBH_IMBH_merger, N_event, press_schechter, num_samples=100):
     """
     Compute the event rate using Monte Carlo integration while sampling masses
     from the Press–Schechter function.
@@ -88,11 +89,11 @@ def event_rate(z_range, M_range, kick_bins, IMBH_IMBH_merger, N_event, press_sch
         v = sample_vkick_from_pdf(vkick_bins, kick_PDF) | units.kms
         v_esc = esc_velocity(haring_rix_relation(M_gal))
         if v < v_esc: # Skip sample if kick velocity is below escape velocity.
-            continue  
+            continue
         
         # Extract IMBH-IMBH merger rate and compute event count.
         Rm = IMBH_IMBH_merger(z, z_min, None).value_in(units.yr**-1)
-        event_count = N_event(M_gal, v, GAMMA, z)
+        event_count = N_event(M_gal, v, gamma, z)
         
         integrand_values[i] = Rm * event_count
         
@@ -102,7 +103,7 @@ def event_rate(z_range, M_range, kick_bins, IMBH_IMBH_merger, N_event, press_sch
     if integral_estimate < 0:
         print("Negative integral estimate, setting to zero")
         integral_estimate = 0
-        
+    
     return integral_estimate | units.yr**-1
 
 def esc_velocity(Mass):
@@ -111,40 +112,44 @@ def esc_velocity(Mass):
     return 3 * vdisp
 
 def look_back(z):
-    """Compute look-back time in Gyr."""
+    """Compute look-back time in years."""
     H0 = 67.4 | (units.kms/units.Mpc)
     tH = (1/H0).value_in(units.yr)
     OmegaM = 0.303
     OmegaLambda = 0.697
-    Ez = np.sqrt(OmegaM * (1 + z)**3 + OmegaLambda)
 
-    look_back_time = integ.quad(lambda z: tH / ((1 + z) * Ez), 0, z)[0]
+    def Ez(zp):
+        return np.sqrt(OmegaM * (1 + zp)**3 + OmegaLambda)
+
+    look_back_time = integ.quad(lambda zp: tH / ((1 + zp) * Ez(zp)), 0, z)[0]
     return look_back_time | units.yr
 
 def N_event(M, vkick, gamma, z):
     """Compute event rate from fit. Total events assuming exhausted after 20 Myr."""
-    AVG_STAR_MASS = 2.43578679652 | units.MSun
     SMBH_mass = haring_rix_relation(M)
+    AVG_STAR_MASS = 2.43578679652 | units.MSun
     
     vdisp = 200 * (SMBH_mass/(1.66 * 1e8 | units.MSun))**(1/4.86) | units.kms
     rinfl = constants.G*SMBH_mass/(vdisp**2)
     rkick = 8. * constants.G*SMBH_mass/vkick**2
     rtide = (0.844**2 * SMBH_mass/AVG_STAR_MASS)**(1./3.) | units.RSun
     
-    term1 = 0.14*(SMBH_mass/AVG_STAR_MASS)**(0.75*(gamma-1)) * (vkick/vdisp)**(-1.2*(gamma-1))
+    term1 = 0.14*(SMBH_mass/AVG_STAR_MASS)**((2./3.) * (gamma-1)) * (vkick/vdisp)**(-(4./3.) * (gamma-1))
     term2 = np.log(SMBH_mass/AVG_STAR_MASS) / np.log(rkick/rtide)
-    term3 = (vkick/rkick)
+    term3 = (vkick/rkick).value_in(units.Myr**-1)
     term4 = 11.6*gamma**-1.75 * (constants.G*SMBH_mass/(rinfl*vkick**2.))**(3.-gamma)
     
-    Mcluster = term4 * SMBH_mass
-    Ncluster = Mcluster / AVG_STAR_MASS
-    frac_merger = 0.25
-    Ncluster *= frac_merger
+    Nrate = 0.6 * term1 * term2 * term3 * term4 | units.Myr**-1
+    if SMBH_mass < 1e6 | units.MSun:
+        trelax = 10.*(SMBH_mass/(4e5 | units.MSun))**(5/4) | units.Myr
+    else:
+        trelax = min(10*(SMBH_mass/(4e5 | units.MSun))**(5/4) | units.Myr, 300 | units.Myr)
     
-    Nrate = 0.2 * term1 * term2 * term3 * term4
+    Ncluster = term4 * SMBH_mass / AVG_STAR_MASS
     time_to_exhaust = Ncluster/Nrate
+    
     look_back_time = look_back(z)
-    time_to_exhaust = min(time_to_exhaust, look_back_time)
+    time_to_exhaust = min(trelax, look_back_time)#, 2*time_to_exhaust)
     return Nrate * time_to_exhaust
 
 def IMBH_IMBH_mergers(z, z_min, z_max):
@@ -180,9 +185,10 @@ def press_schechter(z, M):
     return dn_dM
 
 # --- Plot and parameter definitions ---
-TDE_FACTOR = 2/3
-GW_FACTOR = 1/3 * 0.1
-GAMMA = 1.75
+TDE_FACTOR = 9/10
+GW_FACTOR = 1/10
+H0 = 67.4 | (units.kms/units.Mpc)
+N_event(1110 | units.MSun, 1000 | units.kms, 1.75, 0.5)
 
 plt.rcParams["font.family"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "cm"
@@ -221,16 +227,16 @@ merger_rate = [  # in yr^-1 Gpc^-3
 ]
 
 galaxy_masses = [
-    np.linspace(8.63e7, 3.15e8, 100) | units.MSun,
-    np.linspace(5.52e8, 2.26380341e10, 100) | units.MSun
+    np.linspace(8.63e7, 3.15e8, 500) | units.MSun,
+    np.linspace(5.52e8, 2.26380341e10, 500) | units.MSun
 ]
 all_galaxy_masses = galaxy_masses[-1]
-
+gamma_arr = [1.75, 1.0]
 
 max_events = 0 | units.yr**-1
 
-Nevents_hot =[[ ] for _ in range(2)]
-Nevents_cold =[[ ] for _ in range(2)]
+Nevents_hot =[[ ] for _ in range(4)]
+Nevents_cold =[[ ] for _ in range(4)]
 
 for i, vkick in enumerate([Prob_Distr["Hot Kick CDF"], Prob_Distr["Cold Kick CDF"]]):
     pdf_values = np.array(vkick)
@@ -252,27 +258,57 @@ for i, vkick in enumerate([Prob_Distr["Hot Kick CDF"], Prob_Distr["Cold Kick CDF
             Nevent = event_rate(
                         z_range=[redshift_bins[k], redshift_bins[k+1]], 
                         M_range=masses, 
-                        kick_bins=bin_midpoints,
+                        gamma=gamma_arr[0],
                         IMBH_IMBH_merger=IMBH_IMBH_mergers, 
                         N_event=N_event, 
                         press_schechter=press_schechter,
-                        num_samples=5000
+                        num_samples=3000
                         )
             Nevents += Nevent
             if i == 0:
                 Nevents_hot[j].append(Nevents.value_in(units.yr**-1))
             else:
                 Nevents_cold[j].append(Nevents.value_in(units.yr**-1))
-        
 
+for i, vkick in enumerate([Prob_Distr["Hot Kick CDF"], Prob_Distr["Cold Kick CDF"]]):
+    pdf_values = np.array(vkick)
+    kick_PDF = interp1d(bin_midpoints, pdf_values, kind='linear', fill_value="extrapolate")
+    
+    for j, masses in enumerate(galaxy_masses):
+        Mmax = haring_rix_relation(masses[-1]).value_in(units.MSun)
+        if i == 0:
+            print(f"...Computing for MSMBH < {Mmax} MSun and Hot mergers")
+        else:
+            print(f"...Computing for MSMBH < {Mmax} MSun and Cold mergers")
+            
+        merger_rate_interp = interp1d(merger_rate_zbins, merger_rate[j], 
+                                      kind='linear', fill_value='extrapolate')
+
+        Nevents = 0 | units.yr**-1
+        for k in range(len(redshift_bins)-1):
+            print(f"...computing z < {redshift_bins[k+1]}...")
+            Nevent = event_rate(
+                        z_range=[redshift_bins[k], redshift_bins[k+1]], 
+                        M_range=masses, 
+                        gamma=gamma_arr[1],
+                        IMBH_IMBH_merger=IMBH_IMBH_mergers, 
+                        N_event=N_event, 
+                        press_schechter=press_schechter,
+                        num_samples=3000
+                        )
+            Nevents += Nevent
+            if i == 0:
+                Nevents_hot[j+2].append(Nevents.value_in(units.yr**-1))
+            else:
+                Nevents_cold[j+2].append(Nevents.value_in(units.yr**-1))
+                
 z_range = np.linspace(0, 4, 50000)
 
-event_SMBH_hot = interp1d(redshift_bins[:-1], Nevents_hot[1], kind='linear', fill_value='extrapolate')
-event_SMBH_cold = interp1d(redshift_bins[:-1], Nevents_cold[1], kind='linear', fill_value='extrapolate')
-
 from scipy.interpolate import PchipInterpolator
-event_SMBH_hot = PchipInterpolator(redshift_bins[:-1], Nevents_hot[1])
-event_SMBH_cold = PchipInterpolator(redshift_bins[:-1], Nevents_cold[1])
+event_SMBH_hot_g175 = PchipInterpolator(redshift_bins[:-1], Nevents_hot[1])
+event_SMBH_hot_g1 = PchipInterpolator(redshift_bins[:-1], Nevents_hot[3])
+event_SMBH_cold_g175 = PchipInterpolator(redshift_bins[:-1], Nevents_cold[1])
+event_SMBH_cold_g1 = PchipInterpolator(redshift_bins[:-1], Nevents_cold[3])
 
 fig, ax = plt.subplots()
 ax.yaxis.set_ticks_position('both')
@@ -282,27 +318,32 @@ ax.yaxis.set_minor_locator(mtick.AutoMinorLocator())
 ax.tick_params(axis="y", which='both', direction="in", labelsize=14)
 ax.tick_params(axis="x", which='both', direction="in", labelsize=14)
 
-ax.plot(z_range, TDE_FACTOR * event_SMBH_hot(z_range), color="red", label="TDE")
-ax.plot(z_range, GW_FACTOR * event_SMBH_hot(z_range), color="red", ls=":", label="GW")
-ax.plot(z_range, TDE_FACTOR * event_SMBH_cold(z_range), color="blue")
-ax.plot(z_range, GW_FACTOR * event_SMBH_cold(z_range), color="blue", ls=":")
+ax.plot(z_range, TDE_FACTOR * event_SMBH_cold_g175(z_range), color="blue", label=r"$\gamma=1.75$, Cold")
+ax.plot(z_range, GW_FACTOR * event_SMBH_cold_g175(z_range), color="blue", ls="-.")
+ax.plot(z_range, TDE_FACTOR * event_SMBH_hot_g175(z_range), color="red", label=r"$\gamma=1.75$, Hot")
+ax.plot(z_range, GW_FACTOR * event_SMBH_hot_g175(z_range), color="red", ls="-.")
 
-ax.set_xlim(0, 4)
+ax.plot(z_range, TDE_FACTOR * event_SMBH_cold_g1(z_range), color="dodgerblue", label=r"$\gamma=1.0$, Cold")
+ax.plot(z_range, GW_FACTOR * event_SMBH_cold_g1(z_range), color="dodgerblue", ls="-.")
+ax.plot(z_range, TDE_FACTOR * event_SMBH_hot_g1(z_range), color="firebrick", label=r"$\gamma=1.0$, Hot")
+ax.plot(z_range, GW_FACTOR * event_SMBH_hot_g1(z_range), color="firebrick", ls="-.")
+
+ax.set_xlim(1e-2, 4)
 ax.set_xlabel(r"$z$", fontsize=14)
 ax.set_ylabel(r"$\Gamma_{<}$ [yr$^{-1}$]", fontsize=14)
 ax.set_yscale("log")
-ax.legend(fontsize=14)
+ax.legend(fontsize=13, frameon=False, loc="upper left")
 ax.set_yticks([1, 10, 100, 1000, 10000])
-ax.set_ylim(0.8, 1.25 * TDE_FACTOR * np.max(event_SMBH_hot(z_range)))
-plt.savefig(f"plot/figures/smbh_TDE_rate_Gamma{GAMMA}_PChip.pdf", bbox_inches="tight", dpi=300)
+ax.set_ylim(0.2, 1.5 * TDE_FACTOR * np.max(event_SMBH_hot_g175(z_range)))
+ax.set_xscale("log")
+plt.savefig(f"plot/figures/smbh_TDE_rate.pdf", bbox_inches="tight", dpi=300)
 plt.clf()
 
 
-event_IMBH_hot = interp1d(redshift_bins[:-1], Nevents_hot[0], kind='linear', fill_value='extrapolate')
-event_IMBH_cold = interp1d(redshift_bins[:-1], Nevents_cold[0], kind='linear', fill_value='extrapolate')
-
-event_IMBH_hot = PchipInterpolator(redshift_bins[:-1], Nevents_hot[0])
-event_IMBH_cold = PchipInterpolator(redshift_bins[:-1], Nevents_cold[0])
+event_IMBH_hot_g175 = PchipInterpolator(redshift_bins[:-1], Nevents_hot[0])
+event_IMBH_cold_g175 = PchipInterpolator(redshift_bins[:-1], Nevents_cold[0])
+event_IMBH_hot_g1 = PchipInterpolator(redshift_bins[:-1], Nevents_hot[2])
+event_IMBH_cold_g1 = PchipInterpolator(redshift_bins[:-1], Nevents_cold[2])
 
 fig, ax = plt.subplots()
 ax.yaxis.set_ticks_position('both')
@@ -312,17 +353,23 @@ ax.yaxis.set_minor_locator(mtick.AutoMinorLocator())
 ax.tick_params(axis="y", which='both', direction="in", labelsize=14)
 ax.tick_params(axis="x", which='both', direction="in", labelsize=14)
 
-ax.plot(z_range, TDE_FACTOR * event_IMBH_hot(z_range), color="red", label="TDE")
-ax.plot(z_range, GW_FACTOR * event_IMBH_hot(z_range), color="red", ls=":", label="GW")
-ax.plot(z_range, TDE_FACTOR * event_IMBH_cold(z_range), color="blue")
-ax.plot(z_range, GW_FACTOR * event_IMBH_cold(z_range), color="blue", ls=":")
+ax.plot(z_range, TDE_FACTOR * event_IMBH_cold_g175(z_range), color="blue", label=r"$\gamma=1.75$, Cold")
+ax.plot(z_range, GW_FACTOR * event_IMBH_cold_g175(z_range), color="blue", ls="-.")
+ax.plot(z_range, TDE_FACTOR * event_IMBH_hot_g175(z_range), color="red", label=r"$\gamma=1.75$, Hot")
+ax.plot(z_range, GW_FACTOR * event_IMBH_hot_g175(z_range), color="red", ls="-.")
 
-ax.set_xlim(0, 4)
+ax.plot(z_range, TDE_FACTOR * event_IMBH_cold_g1(z_range), color="dodgerblue", label=r"$\gamma=1.0$, Cold")
+ax.plot(z_range, GW_FACTOR * event_IMBH_cold_g1(z_range), color="dodgerblue", ls="-.")
+ax.plot(z_range, TDE_FACTOR * event_IMBH_hot_g1(z_range), color="firebrick", label=r"$\gamma=1.0$, Hot")
+ax.plot(z_range, GW_FACTOR * event_IMBH_hot_g1(z_range), color="firebrick", ls="-.")
+
+ax.set_xlim(1e-2, 4)
 ax.set_xlabel(r"$z$", fontsize=14)
 ax.set_ylabel(r"$\Gamma_{<}$ [yr$^{-1}$]", fontsize=14)
 ax.set_yscale("log")
 ax.set_yticks([0.1, 1, 10, 100])
 ax.set_yticklabels(['0.1', '1', '10', '100'])
-ax.set_ylim(0.03, 1.25 * TDE_FACTOR * np.max(event_IMBH_cold(z_range)))
-ax.legend(fontsize=14)
-plt.savefig(f"plot/figures/imbh_TDE_rate_Gamma{GAMMA}_PChip.pdf", bbox_inches="tight", dpi=300)
+ax.set_ylim(0.07, 1.5 * TDE_FACTOR * np.max(event_IMBH_cold_g175(z_range)))
+ax.legend(fontsize=13, frameon=False, loc="upper left")
+ax.set_xscale("log")
+plt.savefig(f"plot/figures/imbh_TDE_rate.pdf", bbox_inches="tight", dpi=300)

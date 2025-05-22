@@ -32,6 +32,10 @@ def run_code(file, eta, tend, config, run_no, resume):
         file = (sort_files(snapshot_files))[-1]
         
     pset = read_set_from_file(file, "hdf5")
+    i, j = np.unique(pset.stellar_type, return_counts=True)
+    for id, jd in zip(i, j):
+        print(id, jd)
+    STOP
     SMBH = pset[pset.mass.argmax()]
     SMBH.stellar_type = 14 | units.stellar_type
     
@@ -57,7 +61,7 @@ def run_code(file, eta, tend, config, run_no, resume):
 
 
 vkick = "300"
-mSMBH = "1e5"
+mSMBH = "4e5"
 Nimbh = 0
 run_no = 0
 suffix = "bound"
