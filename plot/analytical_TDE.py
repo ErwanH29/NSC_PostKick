@@ -82,20 +82,25 @@ def wang_2004(SMBH_mass, gamma):
     TDE_rate = 7.1*10**-4*(vdisp/(70 | units.kms))**3.5*(SMBH_mass/(10**6 | units.MSun))**alpha | units.yr**-1
     return TDE_rate
 
-def our_formula(SMBH_mass, vkick, gamma):
+def our_formula(SMBH_mass, vkick, gamma, rinfl=None):
+    #vkick = 4000 | units.kms
+    #SMBH_mass = 1e6 | units.MSun
+    
     vdisp = 200 * (SMBH_mass/(1.66 * 1e8 | units.MSun))**(1/4.86) | units.kms
-    rinfl = constants.G*SMBH_mass/(vdisp**2)
+    if rinfl is None:
+        rinfl = constants.G*SMBH_mass/(vdisp**2)
+        
     rkick = 8. * constants.G*SMBH_mass/vkick**2
     AVG_STAR_MASS = 2.43578679652 | units.MSun
     rtide = (0.844**2 * SMBH_mass/AVG_STAR_MASS)**(1./3.) | units.RSun
     
-    term1 = 0.14*(SMBH_mass/AVG_STAR_MASS)**((2./3.) * (gamma-1)) * (vkick/vdisp)**(-(4./3.) * (gamma-1))
+    term1 = 0.14 * (SMBH_mass/AVG_STAR_MASS)**((gamma-1)/3) * (vkick/vdisp)**(-2*(gamma-1))
     term2 = np.log(SMBH_mass/AVG_STAR_MASS) / np.log(rkick/rtide)
     term3 = (vkick/rkick).value_in(units.Myr**-1)
     term4 = 11.6*gamma**-1.75 * (constants.G*SMBH_mass/(rinfl*vkick**2.))**(3.-gamma)
     
     term_t = term1 * term2 * term3 * term4
-    formula = 0.7 * term_t # in 1/Myr
+    formula = 31.188711107801634 * term_t # in 1/Myr
     #print(f"Our formula TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, g = {gamma}, vkick = {vkick.in_(units.kms)}, {formula.value_in(units.kyr**-1)}")
     return formula
 
@@ -119,12 +124,13 @@ labels = [
 
 gamma = np.linspace(1, 2, 2000)
 
-fig, ax = plt.subplots(figsize=(8, 6))
+fig, ax = plt.subplots(figsize=(6,5))
 ax.yaxis.set_ticks_position('both')
 ax.xaxis.set_ticks_position('both')
 ax.xaxis.set_minor_locator(mtick.AutoMinorLocator())
 ax.yaxis.set_minor_locator(mtick.AutoMinorLocator())
-ax.fill_between(gamma, 1e1, 1e2, color="black", alpha=0.2)
+ax.fill_between(gamma, 1e6*(1e-5), 1e6*(1e-4), color="pink", alpha=0.5)
+ax.fill_between(gamma, 1e6*(1e-4), 1e6*(10**-3.5), color="dodgerblue", alpha=0.15)
 
 gamma = np.linspace(0.5, 2., 10000)
 min_diff = abs(gamma - 1.75).argmin()
@@ -152,18 +158,22 @@ for i,mass in enumerate([1e5, 4e5, 1e6, 4e6, 1e7]):
     
     gamma_1e2 = gamma[int_1e2]
     gamma_1e1 = gamma[int_1e1]
+    ax.plot(gamma, rate_300, color=colours[i], zorder=1, lw=2)
+    ax.scatter(None, None, color=colours[i], label=labels[i])
+
+rate = [ ]
+for g in gamma:
+    rate.append(our_formula(1e7 | units.MSun, 1000 | units.kms, gamma=g, rinfl=10|units.pc))
     
-    ax.scatter(gamma_1e2, rate_300[int_1e2], color=colours[i], zorder=2, s=15)
-    ax.scatter(gamma_1e1, rate_300[int_1e1], color=colours[i], zorder=2, s=15)
-    ax.plot(gamma, rate_300, color=colours[i], zorder=1, lw=2, label=labels[i])
+ax.plot(gamma, rate, color=colours[i], zorder=1, lw=2, ls="--")
     
+ax.set_xlim(1., 2.)
+ax.set_ylim(1.01, 1e4)
 ax.set_xlabel(r"$\gamma$", fontsize=14)#
 ax.set_ylabel(r"$\dot{N}$ [Myr$^{-1}$]", fontsize=14)
 ax.legend(fontsize=14, loc="lower right")
-ax.set_xlim(1., 2.)
-ax.set_ylim(0.2, 1e4)
 ax.set_yscale("log")
-ax.legend(fontsize=14, loc="lower right")
+ax.legend(fontsize=14)
 ax.tick_params(axis="y", which='both', 
                 direction="in", 
                 labelsize=14)

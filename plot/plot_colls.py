@@ -170,18 +170,15 @@ class NCSCPlotter(object):
             AVG_STAR_MASS = 2.43578679652 | units.MSun
             rtide = (0.844**2 * MSMBH/AVG_STAR_MASS)**(1./3.) | units.RSun
             
-            C_RR = 0.14 * (MSMBH/AVG_STAR_MASS)**((2./3.) * (gamma-1)) * (VKICK/vdisp)**(-(4./3.) * (gamma-1)) # Try -2.67 --> \propto v^-2
+            C_RR = 0.14 * (MSMBH/AVG_STAR_MASS)**((gamma-1)/3) * (VKICK/vdisp)**(-2*(gamma-1)) # Try -2.67 --> \propto v^-2
             ln_term = np.log(MSMBH/AVG_STAR_MASS) / np.log(rkick/rtide)
-            t_scale = VKICK/rkick
+            t_scale = (VKICK/rkick).value_in(units.Myr**-1)
             fbound = 11.6*gamma**-1.75 * (constants.G*MSMBH/(rinfl*VKICK**2.))**(3.-gamma)
             
             term_t = C_RR * ln_term * t_scale * fbound
-            term_t = term_t.value_in(units.Myr**-1)
             
             formula = (coeff) * term_t  * time
-            print(f"vkick = {VKICK}, MSMBH = {MSMBH}, rinfl = {rinfl}, rkick = {rkick}, rtide = {rtide}")
-            print(f"CRR={C_RR}, Ln={ln_term}, t_scale={t_scale.in_(units.Myr**-1)}, fbound={fbound}")
-            print(f"In 0.1 Myr --> {coeff*C_RR*ln_term*t_scale.value_in(units.Myr**-1)*fbound*0.1}")
+            print(f"In 0.1 Myr --> {coeff*C_RR*ln_term*t_scale*fbound*0.1}")
             print(f"Therefore coefficient {coeff} is in Myr")
             
             return formula
@@ -375,7 +372,7 @@ class NCSCPlotter(object):
             #ax.xaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
             #ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
             ax.set_xlim(0, 0.1)
-            ax.set_ylim(1, 100)
+            ax.set_ylim(1, 130)
             #ax.set_yscale("log")
             plt.savefig(f"plot/figures/Ncoll_vs_time_{config_name[label]}.pdf", dpi=300, bbox_inches='tight')
             plt.clf()
@@ -409,12 +406,7 @@ class NCSCPlotter(object):
                 VKICK = 600 | units.kms
             
             mask = median_smoothed != 0
-            print("XXXXXXXXXXXXXXXXXXXX", median_smoothed[mask][1600])
-            if MSMBH == 4e5 | units.MSun and VKICK == 300 | units.kms:
-                params, covariance = curve_fit(custom_function, time_smoothed[mask][:1600], median_smoothed[mask][:1600], p0=[1], maxfev=10000)
-            else:
-                params, covariance = curve_fit(custom_function, time_smoothed[mask], median_smoothed[mask], p0=[1], maxfev=10000)
-            print(median_smoothed[-1])
+            params, covariance = curve_fit(custom_function, time_smoothed[mask], median_smoothed[mask], p0=[1], maxfev=1000000)
             print(f"===="*30)
             y_fit = custom_function(x_fit, *params)
             ax.plot(x_fit, y_fit, color="black", lw=0.29)
@@ -827,7 +819,7 @@ for m in masses:
         rinfl = (constants.G*m/(200*(m/(1.66*1e8 | units.MSun))**(1/4.86) | units.kms)**(2))
         factor += (200/v.value_in(units.kms))**(1-3.25) * (m.value_in(units.MSun)) ** (1-1.5)
                      
-ONLY_SMBH = False
+ONLY_SMBH = True
    
 plot = NCSCPlotter()
 plot.plot_time_vs_coll()

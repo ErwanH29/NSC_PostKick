@@ -448,7 +448,7 @@ class NCSCPlotter(object):
                 strain_array[key].append(strain)
         print(f"Typical event time: {np.mean(event_time)} s, {np.median(event_time)} s")
         
-        fig = plt.figure(figsize=(8, 6))
+        fig = plt.figure(figsize=(6,5))
         gs = fig.add_gridspec(2, 2,  width_ratios=(4,2), height_ratios=(2,5),
                               left=0.1, right=0.9, bottom=0.1, top=0.9,
                               wspace=0.05, hspace=0.05
@@ -461,6 +461,9 @@ class NCSCPlotter(object):
             
         ax1.tick_params(axis="x", labelbottom=False)
         #ax2.tick_params(axis="y", labelleft=False)
+        
+        fig, ax = plt.subplots(figsize=(6,5))
+        self.tickers(ax, "plot", False)
         self.interferometer_plotter(ax)
         
         for i, key in enumerate(freq_array.keys()):
@@ -469,26 +472,26 @@ class NCSCPlotter(object):
             #c = "black"
             if len(x) > 0:
                 c = self.cmap_colours[i]
-                ax.scatter(x, y, color=c, s=10)
+                ax.scatter(x, y, color=c)
                 ax.scatter(None, None, s=50, color=c, label=key)
                 #ax.scatter(None, None, color=c, label=key)
-                if np.sum(np.isclose(x.imag, 0)) > 5:
+                """if np.sum(np.isclose(x.imag, 0)) > 5:
                     KDE_x, KDE_y = self.KDE_plotter([x,y])
                     
                     ax1.plot(KDE_x[0], KDE_x[1], color=c)
                     #ax2.plot(KDE_y[0], KDE_y[1], color=c)
                     ax1.fill_between(KDE_x[0], KDE_x[1], color=c, alpha=0.35)
-                    #ax2.fill_between(KDE_y[0], KDE_y[1], color=c, alpha=0.35)
+                    #ax2.fill_between(KDE_y[0], KDE_y[1], color=c, alpha=0.35)"""
             
         
-        ax.set_xlim(-5, 3)
+        ax.set_xlim(-5, 4)
         #ax.set_ylim(-31, -17)
-        ax1.set_ylim(0.01, 1.04)
+        #ax1.set_ylim(0.01, 1.04)
         #ax2.set_xlim(0.01, 1.04)
         ax.legend(fontsize=12, loc="lower right")
         ax.set_xlabel(r"$\log_{10}f$ [Hz]", fontsize=self.TICK_SIZE)
         ax.set_ylabel(r"$\log_{10}h$", fontsize=self.TICK_SIZE)
-        ax1.set_ylabel(r'$\rho/\rho_{\rm{max}}$', fontsize=self.TICK_SIZE)
+        #ax1.set_ylabel(r'$\rho/\rho_{\rm{max}}$', fontsize=self.TICK_SIZE)
         #ax2.set_xlabel(r'$\rho/\rho_{\rm{max}}$', fontsize=self.TICK_SIZE)
         
         plt.savefig(f"plot/figures/GW_freq_strain.pdf", dpi=300, bbox_inches='tight')
@@ -531,15 +534,15 @@ class NCSCPlotter(object):
         """
         # LISA
         lisa = li.LISA() 
-        x_temp = np.linspace(1e-5, 1, 100000)
+        x_temp = np.linspace(1e-5, 1, 500000)
         Sn = lisa.Sn(x_temp)
 
         ax.plot(np.log10(x_temp), np.log10(np.sqrt(x_temp*Sn)), color='black')
-        ax.text(-4.3, -19.0, 'LISA', rotation=-45, color='black',fontsize=self.TICK_SIZE+3)
+        ax.text(-4.2, -19.0, 'LISA', rotation=-48, color='black',fontsize=self.TICK_SIZE+3)
         
         f_lower = 10
         duration = 128
-        sample_rate = 4096
+        sample_rate = 40960
         tsamples = sample_rate * duration
         fsamples = tsamples // 2 + 1
         df = 1.0 / duration
@@ -551,7 +554,7 @@ class NCSCPlotter(object):
         freqs = freqs[mask]
         strain = np.sqrt(freqs * psd[mask])
         ax.plot(np.log10(freqs), np.log10(strain), color="black")
-        ax.text(0.2, -22, "Adv. LIGO", fontsize=self.TICK_SIZE, rotation=-40)
+        ax.text(0.3, -22, "Adv. LIGO", fontsize=self.TICK_SIZE, rotation=-43)
                             
         
 plot = NCSCPlotter()

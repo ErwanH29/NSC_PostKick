@@ -88,8 +88,8 @@ def event_rate(z_range, M_range, gamma, IMBH_IMBH_merger, N_event, press_schecht
         # Sample the kick velocity
         v = sample_vkick_from_pdf(vkick_bins, kick_PDF) | units.kms
         v_esc = esc_velocity(haring_rix_relation(M_gal))
-        if v < v_esc: # Skip sample if kick velocity is below escape velocity.
-            continue
+        #if v < v_esc: # Skip sample if kick velocity is below escape velocity.
+        #    continue
         
         # Extract IMBH-IMBH merger rate and compute event count.
         Rm = IMBH_IMBH_merger(z, z_min, None).value_in(units.yr**-1)
@@ -128,29 +128,28 @@ def N_event(M, vkick, gamma, z):
     """Compute event rate from fit. Total events assuming exhausted after 20 Myr."""
     SMBH_mass = haring_rix_relation(M)
     AVG_STAR_MASS = 2.43578679652 | units.MSun
-    
     vdisp = 200 * (SMBH_mass/(1.66 * 1e8 | units.MSun))**(1/4.86) | units.kms
     rinfl = constants.G*SMBH_mass/(vdisp**2)
     rkick = 8. * constants.G*SMBH_mass/vkick**2
     rtide = (0.844**2 * SMBH_mass/AVG_STAR_MASS)**(1./3.) | units.RSun
     
-    term1 = 0.14*(SMBH_mass/AVG_STAR_MASS)**((2./3.) * (gamma-1)) * (vkick/vdisp)**(-(4./3.) * (gamma-1))
+    term1 = 0.14 * (SMBH_mass/AVG_STAR_MASS)**((gamma-1)/3) * (vkick/vdisp)**(-2*(gamma-1))
     term2 = np.log(SMBH_mass/AVG_STAR_MASS) / np.log(rkick/rtide)
     term3 = (vkick/rkick).value_in(units.Myr**-1)
     term4 = 11.6*gamma**-1.75 * (constants.G*SMBH_mass/(rinfl*vkick**2.))**(3.-gamma)
     
-    Nrate = 0.6 * term1 * term2 * term3 * term4 | units.Myr**-1
-    if SMBH_mass < 1e6 | units.MSun:
-        trelax = 10.*(SMBH_mass/(4e5 | units.MSun))**(5/4) | units.Myr
-    else:
-        trelax = min(10*(SMBH_mass/(4e5 | units.MSun))**(5/4) | units.Myr, 300 | units.Myr)
+    Nrate = 31.188711107801634 * term1 * term2 * term3 * term4 | units.Myr**-1
+    
     
     Ncluster = term4 * SMBH_mass / AVG_STAR_MASS
     time_to_exhaust = Ncluster/Nrate
-    
     look_back_time = look_back(z)
-    time_to_exhaust = min(trelax, look_back_time)#, 2*time_to_exhaust)
-    return Nrate * time_to_exhaust
+    trelax = 10.*(SMBH_mass/(4e5 | units.MSun))**(5/4) | units.Myr
+    if SMBH_mass > 1e6 | units.MSun:
+        trelax = min(10*(SMBH_mass/(4e5 | units.MSun))**(5/4) | units.Myr, 300 | units.Myr)
+    
+    time = min(0.5*trelax, look_back_time, time_to_exhaust)
+    return Nrate * time
 
 def IMBH_IMBH_mergers(z, z_min, z_max):
     """IMBH-IMBH merger rate in [yr^-1] from arXiv:2412.15334."""
@@ -188,7 +187,6 @@ def press_schechter(z, M):
 TDE_FACTOR = 9/10
 GW_FACTOR = 1/10
 H0 = 67.4 | (units.kms/units.Mpc)
-N_event(1110 | units.MSun, 1000 | units.kms, 1.75, 0.5)
 
 plt.rcParams["font.family"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "cm"
@@ -262,7 +260,7 @@ for i, vkick in enumerate([Prob_Distr["Hot Kick CDF"], Prob_Distr["Cold Kick CDF
                         IMBH_IMBH_merger=IMBH_IMBH_mergers, 
                         N_event=N_event, 
                         press_schechter=press_schechter,
-                        num_samples=3000
+                        num_samples=20000
                         )
             Nevents += Nevent
             if i == 0:
@@ -294,7 +292,7 @@ for i, vkick in enumerate([Prob_Distr["Hot Kick CDF"], Prob_Distr["Cold Kick CDF
                         IMBH_IMBH_merger=IMBH_IMBH_mergers, 
                         N_event=N_event, 
                         press_schechter=press_schechter,
-                        num_samples=3000
+                        num_samples=20000
                         )
             Nevents += Nevent
             if i == 0:
@@ -336,7 +334,7 @@ ax.legend(fontsize=13, frameon=False, loc="upper left")
 ax.set_yticks([1, 10, 100, 1000, 10000])
 ax.set_ylim(0.2, 1.5 * TDE_FACTOR * np.max(event_SMBH_hot_g175(z_range)))
 ax.set_xscale("log")
-plt.savefig(f"plot/figures/smbh_TDE_rate.pdf", bbox_inches="tight", dpi=300)
+plt.savefig(f"plot/figures/smbh_TDE_rate_vesc.pdf", bbox_inches="tight", dpi=300)
 plt.clf()
 
 
@@ -372,4 +370,4 @@ ax.set_yticklabels(['0.1', '1', '10', '100'])
 ax.set_ylim(0.07, 1.5 * TDE_FACTOR * np.max(event_IMBH_cold_g175(z_range)))
 ax.legend(fontsize=13, frameon=False, loc="upper left")
 ax.set_xscale("log")
-plt.savefig(f"plot/figures/imbh_TDE_rate.pdf", bbox_inches="tight", dpi=300)
+plt.savefig(f"plot/figures/imbh_TDE_rate_vesc.pdf", bbox_inches="tight", dpi=300)
