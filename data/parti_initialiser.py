@@ -7,8 +7,7 @@ from amuse.lab import Particles, constants, units
 
 class MW_SMBH(object):
     """Class which defines the central SMBH"""
-    def __init__(self, 
-                 mass, 
+    def __init__(self, mass, 
                  position=[0., 0., 0.] | units.pc, 
                  velocity=[0., 0., 0.] | units.kms):
         self.mass = mass
@@ -21,31 +20,26 @@ class ClusterInitialise(object):
     def star_mass(self, nStar):
         """
         Set stellar particle masses
-        
         Args:
             nStar (int):  Number of stellar particles
         Returns:
-            masses (float):  Mass distribution for stellar particles
+            masses (units.mass):  Mass distribution for stellar particles
         """
         alpha = -1.5   # arXiv:0305423
-        mass_min = 0.5 | units.MSun   # arXiv:0305423
+        mass_min = 0.5 | units.MSun    # arXiv:0305423
         mass_max = 100. | units.MSun   # arXiv:1505.05473
-        return new_salpeter_mass_distribution(nStar, mass_min, 
-                                              mass_max, alpha
-                                              ) 
+        return new_salpeter_mass_distribution(nStar, mass_min, mass_max, alpha) 
 
     def init_cluster(self, mass, rvir, gamma, rcavity):
         """
-        Initialise the cluster. 
-        Makes use of the AGAMA framework (https://github.com/GalacticDynamics-Oxford/Agama/)
-        
+        Initialise the cluster. Makes use of the AGAMA framework.
         Args:
-            mass (float):  Mass of SMBH
-            rvir (float):  Cluster initial virial radius
+            mass (units.mass):  Mass of SMBH
+            rvir (units.length):  Cluster initial virial radius
             gamma (float):  Cluster density power-law
-            rcavity (float):  Cluster cavity size
+            rcavity (units.length):  Cluster cavity size
         Returns:
-            particles (object):  Particle set
+            particles (amuse.particles):  Particle set
         """
         SMBH_parti = MW_SMBH(mass)
         nStar = 133000
@@ -57,9 +51,10 @@ class ClusterInitialise(object):
         particles[0].velocity = [0., 0., 0.] | units.kms
         particles[0].mass = SMBH_parti.mass
         
-        stars = Particles(nStar)
         masses = self.star_mass(nStar)
+        stars = Particles(nStar)
         stars.mass = masses
+        
         stellar_code = SeBa()
         stellar_code.particles.add_particle(stars)
         stellar_code.evolve_model(0.1 | units.Gyr)

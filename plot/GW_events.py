@@ -1,6 +1,5 @@
 import glob
 import plot.LISA_Curves.LISA as li
-import os
 import matplotlib.pyplot as plt
 from matplotlib.ticker import StrMethodFormatter
 import matplotlib.ticker as mtick
@@ -17,51 +16,57 @@ M_CH = 1.44 | units.MSun
 def moving_average(array, smoothing):
     """
     Conduct running average of some variable
-    
     Args:
-        array (list):     Array hosting values
-        smoothing (float): Number of elements to average over
+        array (list):  Array hosting values
+        smoothing (float):  Number of elements to average over
     Returns:
         value (list):  List of values smoothed over some length
     """
     value = np.cumsum(array, dtype=float)
     value[smoothing:] = value[smoothing:] - value[:-smoothing]
-
     return value[smoothing-1:]/smoothing
 
 def neutron_star_radius(mass):
     """
     Define neutron star radius using https://arxiv.org/abs/astro-ph/0002203
     Args:
-        mass (float):  Mass of the neutron star
+        mass (units.mass):  Mass of the neutron star
     Returns:
-        radius (float):  Neutron star radius
+        radius (units.length):  Neutron star radius
     """
-    return 11.5 * (mass/M_CH)**(-1/3) | units.RSun
+    return 11.5*(mass/M_CH)**(-1/3) | units.RSun
 
 def white_dwarf_radius(mass):
     """
     Define white dwarf radius using https://arxiv.org/abs/astro-ph/0401420
     Args:
-        mass (float):  Mass of the neutron star
+        mass (units.mass):  Mass of the neutron star
     Returns:
-        radius (float):  Neutron star radius
+        radius (units.length):  Neutron star radius
     """
     return 0.0127 * (M_CH/mass)**(1/3) * (1 - (mass/M_CH)**(4/3))**(1/2) | units.RSun
 
 def black_hole_radius(mass):
+    """
+    Define black hole radius using the Schwarzschild radius formula.
+    Args:
+        mass (units.mass):  Mass of the black hole
+    Returns:
+        radius (units.length):  Black hole radius
+    """
     return (6.*constants.G*mass)/(constants.c**2.)
 
 
 class NCSCPlotter(object):
     def __init__(self):
-        self.AXLABEL_SIZE = 14
-        self.TICK_SIZE = 14
+        self.AXLABEL_SIZE = self.TICK_SIZE = 14
         plt.rcParams["font.family"] = "Times New Roman"
         plt.rcParams["mathtext.fontset"] = "cm"
         
-        self.data_labels = [r"$M_{\rm SMBH} = 10^{5}$ M$_\odot$", None,
-                            r"$M_{\rm SMBH} = 4 \times 10^{5}$ M$_\odot$", None]
+        self.data_labels = [
+            r"$M_{\rm SMBH} = 10^{5}$ M$_\odot$", None,
+            r"$M_{\rm SMBH} = 4 \times 10^{5}$ M$_\odot$", None
+            ]
         self.labels = [r"$300$ km s$^{-1}$", r"$600$ km s$^{-1}$"]
         self.colours = ["red", "blue"]
         self.colours_two = ["blue", "red"]
@@ -72,14 +77,21 @@ class NCSCPlotter(object):
         self.cmap_colours = cmap(np.linspace(0.15, 1, 5))
         
     def extract_folder(self, SMBH_mass, vkick, folder):
-        """Extract the data folders"""
+        """
+        Extract the data folders
+        Args:
+            SMBH_mass (str):  Mass of the SMBH
+            vkick (str):  Velocity kick of the SMBH
+            folder (str):  Folder to extract data from
+        Returns:
+            data_folders (list):  List of data folders
+        """
         data_folders = natsort.natsorted(glob.glob(f"/media/erwanh/PhD Material/All_Data/3_Runaway_BH_At_Kick/{vkick}kms_m{SMBH_mass}/Nimbh0_RA_BH_Run/{folder}/*"))
         return data_folders
         
     def tickers(self, ax, ptype, sig_fig):
         """
         Function to setup axis
-        
         Args:
             ax (axis):  Axis needing cleaning up
             ptype (String):  Plot type (hist || plot)
@@ -114,10 +126,10 @@ class NCSCPlotter(object):
         """
         Calculate the semi-major axis from the collision radius and eccentricity.
         Args:
-            coll_rad (float):  Collision radius
+            coll_rad (units.length):  Collision radius
             ecc (float):  Binary eccentricity
         Returns:
-            sma (float):  Semi-major axis
+            sma (units.length):  Semi-major axis
         """
         return coll_rad/(ecc - 1)
     
@@ -125,10 +137,10 @@ class NCSCPlotter(object):
         """
         Calculate the impact parameter from the collision radius and eccentricity.
         Args:
-            coll_rad (float):  Collision radius
+            coll_rad (units.length):  Collision radius
             ecc (float):  Binary eccentricity
         Returns:
-            b (float):  Impact parameter
+            b (units.length):  Impact parameter
         """
         return coll_rad/(np.sqrt(ecc**2 - 1))
 
@@ -136,11 +148,11 @@ class NCSCPlotter(object):
         """
         Calculate the relative velocity of the binary components.
         Args:
-            mass_a (float):  Mass of binary component A
-            mass_b (float):  Mass of binary component B
-            sma (float):  Binary semi-major axis
+            mass_a (units.mass):  Mass of binary component A
+            mass_b (units.mass):  Mass of binary component B
+            sma (units.length):  Binary semi-major axis
         Returns:
-            v0 (float):  Relative velocity
+            v0 (units.velocity):  Relative velocity
         """
         return np.sqrt(constants.G * (mass_a + mass_b)/sma)
     
@@ -149,8 +161,8 @@ class NCSCPlotter(object):
         Calculate the hyperbolic event duration. Eqn (2) arXiv:1706.02111
         Args:
             ecc (float):  Binary eccentricity
-            b (float):  Impact parameter
-            v0 (float):  Initial velocity
+            b (units.length):  Impact parameter
+            v0 (units.velocity):  Initial velocity
         """
         numerator = 2. * (2.**(1/3) - 1.) * (ecc-1)
         denomiantor = ecc**2 * np.sqrt(ecc + 1.) * np.sqrt(2.**(7/6) + (2.**(1/3)-1.)*ecc - (2.**(1/3) +1.))
@@ -164,19 +176,15 @@ class NCSCPlotter(object):
         Calculate the hyperbolic frequency (the interaction timescale).
         See: arXiv:0603441 and DOI:10.1086/155501 
         Args:
-            mass_a (float):  Mass of binary component A
-            mass_b (float):  Mass of binary component B
-            sma (float):  Binary semi-major axis
+            mass_a (units.mass):  Mass of binary component A
+            mass_b (units.mass):  Mass of binary component B
+            sma (units.length):  Binary semi-major axis
             ecc (float):  Binary eccentricity
-            rcoll (float):  Collision radius (assumption rperi = rcoll)
+            rcoll (units.length):  Collision radius (assumption rperi = rcoll)
         Returns:
-            freq (float):  The hyperbolic frequency
-            rp (float):  The periastron distance
+            freq (units.hertz):  The hyperbolic frequency
+            rp (units.length):  The periastron distance
         """
-        # b = coll_rad * (ecc + 1)**(3/2)/(ecc - 1)**(1/2) # arXiv:1706.02111
-        #v0_sq_sq = (constants.G * (mass_a + mass_b)/b)**2 * (ecc**2 - 1)
-        #v0x = np.sqrt(np.sqrt(v0_sq_sq))
-        
         sma = self.get_sma(rcoll, ecc)
         b = self.get_impact_parameter(rcoll, ecc)
         v0 = self.get_relative_velocity(mass_a, mass_b, sma)

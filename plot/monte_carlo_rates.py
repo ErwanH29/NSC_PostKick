@@ -9,16 +9,14 @@ from amuse.lab import units, constants
 def sample_mass_from_PS_at_z(z, mass_range, press_schechter):
     """
     Sample a galaxy mass from the Press–Schechter function at redshift z.
-    
     Args:
-        z: Redshift at which to sample.
-        mass_range: Array of masses (AMUSE units) defining the allowed mass range.
-        press_schechter: Function press_schechter(z, M) returning the number density (e.g., in Mpc^-3).
-    
+        z (float): Redshift at which to sample the mass.
+        mass_range (units.mass): Range of galaxy masses to sample from (AMUSE units).
+        press_schechter (function): Function computing the Press–Schechter mass function.
     Returns:
-        A single mass (with AMUSE units) sampled according to the Press–Schechter distribution.
+        A sampled galaxy mass (in AMUSE units).
     """
-    Ngrid = 5*10**4
+    Ngrid = 5e4
     
     m_min = mass_range[0].value_in(units.MSun)
     m_max = mass_range[-1].value_in(units.MSun)
@@ -43,13 +41,11 @@ def sample_mass_from_PS_at_z(z, mass_range, press_schechter):
 def sample_vkick_from_pdf(vkick_bins, pdf_vals):
     """
     Sample a vkick value from a step function PDF.
-
     Args:
-        vkick_bins: 1D numpy array of bin edges.
-        pdf_values: Array-like of PDF values for each bin.
-                    
+        vkick_bins (array): Bins for the kick velocity PDF.
+        pdf_vals (function): Function computing the PDF values at vkick_bins.
     Returns:
-        A vkick sample (in the same units as vkick_bins).
+        A sampled kick velocity in kms.
     """
     bin_widths = np.diff(vkick_bins)
     bin_probs = pdf_vals(bin_midpoints) * bin_widths
@@ -63,15 +59,14 @@ def event_rate(z_range, M_range, gamma, IMBH_IMBH_merger, N_event, press_schecht
     """
     Compute the event rate using Monte Carlo integration while sampling masses
     from the Press–Schechter function.
-    
     Args:
-        z_range: Redshift range (e.g. [z_min, z_max]).
-        M_range: Galaxy mass range (AMUSE units; array-like).
-        kick_bins:  Kick velocity bins.
-        IMBH_IMBH_merger: Function computing the merger rate.
-        N_event: Function computing event rate.
-        press_schechter: Press–Schechter mass function.
-        num_samples: Number of Monte Carlo samples.
+        z_range (float): Redshift range (e.g. [z_min, z_max]).
+        M_range (units.mass): Galaxy mass range
+        kick_bins (array):  Kick velocity bins in kms
+        IMBH_IMBH_merger (function): Function computing the merger rate.
+        N_event (function): Function computing event rate.
+        press_schechter (function): Press–Schechter mass function.
+        num_samples (int): Number of Monte Carlo samples.
     
     Returns:
         Event rate in [yr^-1] (AMUSE units).
@@ -88,8 +83,8 @@ def event_rate(z_range, M_range, gamma, IMBH_IMBH_merger, N_event, press_schecht
         # Sample the kick velocity
         v = sample_vkick_from_pdf(vkick_bins, kick_PDF) | units.kms
         v_esc = esc_velocity(haring_rix_relation(M_gal))
-        #if v < v_esc: # Skip sample if kick velocity is below escape velocity.
-        #    continue
+        if v < v_esc:
+            continue
         
         # Extract IMBH-IMBH merger rate and compute event count.
         Rm = IMBH_IMBH_merger(z, z_min, None).value_in(units.yr**-1)
@@ -99,7 +94,6 @@ def event_rate(z_range, M_range, gamma, IMBH_IMBH_merger, N_event, press_schecht
         
     avg_integrand = np.mean(integrand_values)
     integral_estimate = avg_integrand * (z_max - z_min)
-    #integral_estimate = np.trapezoid(integrand_values, z_samples)
     if integral_estimate < 0:
         print("Negative integral estimate, setting to zero")
         integral_estimate = 0
@@ -107,12 +101,25 @@ def event_rate(z_range, M_range, gamma, IMBH_IMBH_merger, N_event, press_schecht
     return integral_estimate | units.yr**-1
 
 def esc_velocity(Mass):
-    """Calculate galactic escape velocity assuming truncated isothermal sphere potential. Default units in km/s."""
+    """
+    Calculate galactic escape velocity assuming truncated isothermal sphere potential. 
+    Default units in km/s.
+    Args:
+        Mass (units.mass): Mass of the galaxy in solar masses.
+    Returns:
+        Escape velocity in km/s.
+    """
     vdisp = 200 * (Mass/(1.66*10**8 | units.MSun))**(1/4.86) | units.kms
     return 3 * vdisp
 
 def look_back(z):
-    """Compute look-back time in years."""
+    """
+    Compute look-back time in years.
+    Args:
+        z (float): Redshift.
+    Returns:
+        Look-back time in units.time.
+    """
     H0 = 67.4 | (units.kms/units.Mpc)
     tH = (1/H0).value_in(units.yr)
     OmegaM = 0.303
@@ -125,7 +132,17 @@ def look_back(z):
     return look_back_time | units.yr
 
 def N_event(M, vkick, gamma, z):
-    """Compute event rate from fit. Total events assuming exhausted after 20 Myr."""
+    """
+    Compute event rate from fit. 
+    Total events assuming exhausted after 20 Myr.
+    Args:
+        M (units.mass): Mass of the SMBH in solar masses.
+        vkick (units.velocity): Kick velocity in km/s.
+        gamma (float): Power-law index for the mass function.
+        z (float): Redshift.
+    Returns:
+        Total number of events.
+    """
     SMBH_mass = haring_rix_relation(M)
     AVG_STAR_MASS = 2.43578679652 | units.MSun
     vdisp = 200 * (SMBH_mass/(1.66 * 1e8 | units.MSun))**(1/4.86) | units.kms
@@ -140,7 +157,6 @@ def N_event(M, vkick, gamma, z):
     
     Nrate = 31.188711107801634 * term1 * term2 * term3 * term4 | units.Myr**-1
     
-    
     Ncluster = term4 * SMBH_mass / AVG_STAR_MASS
     time_to_exhaust = Ncluster/Nrate
     look_back_time = look_back(z)
@@ -152,7 +168,15 @@ def N_event(M, vkick, gamma, z):
     return Nrate * time
 
 def IMBH_IMBH_mergers(z, z_min, z_max):
-    """IMBH-IMBH merger rate in [yr^-1] from arXiv:2412.15334."""
+    """
+    IMBH-IMBH merger rate in [yr^-1] from arXiv:2412.15334.
+    Args:
+        z (float): Redshift.
+        z_min (float): Minimum redshift for integration.
+        z_max (float): Maximum redshift for integration.
+    Returns:
+        IMBH-IMBH merger rate in units.time
+    """
     merger_rate_density = merger_rate_interp(z) | units.yr**-1 * (units.Gpc)**-3
 
     # Cosmological parameters
@@ -171,12 +195,25 @@ def IMBH_IMBH_mergers(z, z_min, z_max):
     return dNdz
 
 def haring_rix_relation(mass):
-    """Haring-Rix relation (BH-Galactic Bulge mass)."""
+    """
+    Haring-Rix relation (BH-Galactic Bulge mass).
+    Args:
+        mass (units.mass): Mass of the galaxy in solar masses.
+    Returns:
+        Black hole mass in units.mass.
+    """
     alpha_val = 8.8 + 1.24 * np.log10(mass/(1e11 | units.MSun))
     return 10**alpha_val | units.MSun
 
 def press_schechter(z, M):
-    """Compute the Press–Schechter mass function at redshift z and mass M (in Mpc^-3)."""
+    """
+    Compute the Press–Schechter mass function at redshift z and mass M (in Mpc^-3).
+    Args:
+        z (float): Redshift.
+        M (units.mass): Mass in solar masses.
+    Returns:
+        Press–Schechter mass function value in units.length**-3.
+    """
     phi_star_val = phi_star_interp(z) | (units.Mpc**-3)
     mass_param = M / (M_star_interp(z) | units.MSun)
     alpha_param = alpha_interp(z)
@@ -184,8 +221,8 @@ def press_schechter(z, M):
     return dn_dM
 
 # --- Plot and parameter definitions ---
-TDE_FACTOR = 9/10
-GW_FACTOR = 1/10
+TDE_FACTOR = 0.9
+GW_FACTOR = 0.1
 H0 = 67.4 | (units.kms/units.Mpc)
 
 plt.rcParams["font.family"] = "Times New Roman"
@@ -219,10 +256,10 @@ alpha_interp = interp1d(redshift_bins, alpha_values, kind='linear', fill_value='
 redshift_bins = [0, 0.1, 0.5, 1.0, 2.0, 3.0, 4.0]
 
 merger_rate_zbins = [0, 0.75, 1.25, 2, 2.6, 4, 4.6]
-merger_rate = [  # in yr^-1 Gpc^-3
+merger_rate = [  
     [0.0006, 0.0007, 0.0037, 0.0020, 0.0055, 0.0000, 0.0025],
     [0.0005, 0.0003, 0.0025, 0.0020, 0.0045, 0.0000, 0.0000], 
-]
+]  # in yr^-1 Gpc^-3
 
 galaxy_masses = [
     np.linspace(8.63e7, 3.15e8, 500) | units.MSun,
@@ -235,7 +272,6 @@ max_events = 0 | units.yr**-1
 
 Nevents_hot =[[ ] for _ in range(4)]
 Nevents_cold =[[ ] for _ in range(4)]
-
 for i, vkick in enumerate([Prob_Distr["Hot Kick CDF"], Prob_Distr["Cold Kick CDF"]]):
     pdf_values = np.array(vkick)
     kick_PDF = interp1d(bin_midpoints, pdf_values, kind='linear', fill_value="extrapolate")
