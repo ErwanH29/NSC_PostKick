@@ -149,7 +149,7 @@ def run_code(vkick, nimbh):
                     f.write('\n')
 
 TARGET_NSIMS = 10
-SMBH_MASS = 4e5 | units.MSun 
+SMBH_MASS = 1e5 | units.MSun 
 TOTAL_IMBH_MASS = 4000 | units.MSun
 vkick = [150, 300, 600, 1200] | units.kms
-run_code(vkick=300|units.kms, nimbh=8)
+run_code(vkick=150|units.kms, nimbh=0)

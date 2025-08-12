@@ -121,13 +121,13 @@ def stellar_tidal_radius(stars, SMBH_mass):
 def neutron_star_radius(mass):
     """
     Define neutron star radius
-    Based on https://arxiv.org/abs/astro-ph/0002203
+    Based on Eqn (8): https://arxiv.org/pdf/1305.3510
     Args:
         mass (units.mass):  Mass of the neutron star
     Returns:
         radius (units.length):  Neutron star radius
     """
-    return 11.5 * (mass/MCH)**(-1./3.) | units.RSun
+    return 2.824 * (constants.G * mass)/(constants.c**2)
 
 def white_dwarf_radius(mass):
     """

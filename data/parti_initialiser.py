@@ -42,7 +42,7 @@ class ClusterInitialise(object):
             particles (amuse.particles):  Particle set
         """
         SMBH_parti = MW_SMBH(mass)
-        nStar = 133000
+        nStar = 45000
         print(f"#Stars ={nStar}")
 
         particles = Particles(1)
