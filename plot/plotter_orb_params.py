@@ -559,11 +559,12 @@ colours = ["black", "red", "blue"]
 linestyle = [":", "-"]
 files = [ ]
 
-configs = natsort.natsorted(glob.glob("/media/erwanh/Elements/BH_Post_Kick/data/freeze_frames/*"))
+configs = natsort.natsorted(glob.glob("/media/erwanh/Elements/temp_freeze/freeze_frames/*"))
 configs = [i for i in configs if "hdf5" not in i]
 for c in configs:
     particle_sets = natsort.natsorted(glob.glob(f"{c}/*.hdf5"))
     files = np.concatenate((files, particle_sets), axis=None)
+    print(c, particle_sets)
 
 for i, data_file in enumerate(files):
     print(f"I.C #{i}: {data_file}")
@@ -809,6 +810,7 @@ if (CONTOUR_PLOTS):
             ecc_data = bound_ecc_arr[k]
             inc_data = bound_inc_arr[k]
             true_anom_data = bound_true_anom_arr[k]
+            aop_data = bound_arg_peri_arr[k]
             
             contour_plots(
                 x_data=sma_data, 
@@ -835,6 +837,15 @@ if (CONTOUR_PLOTS):
                 ylims=[-180, 180], 
                 fname=f"plot/figures/contour_{labels[k]}_sma_true_anom.pdf",
                 y_label=x_labels[3]
+            )
+            
+            contour_plots(
+                x_data=sma_data, 
+                y_data=aop_data, 
+                xlims=[-3.7, 1.4], 
+                ylims=[-180, 180], 
+                fname=f"plot/figures/contour_{labels[k]}_sma_aop.pdf",
+                y_label=x_labels[4]
             )
             
         

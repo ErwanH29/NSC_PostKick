@@ -159,7 +159,6 @@ class EvolveSystem(object):
                     print("Star-Star collision")
                     newp = self.process_merger(enc_particles_set, stellar_type_arr)
                     stellar_particles.add_particle(newp)
-                    newp.radius = stellar_particles[-1].radius
                     newp.radius = stellar_tidal_radius(newp, self.particles.mass.max())
                     self.grav_code.particles.add_particle(newp)
 

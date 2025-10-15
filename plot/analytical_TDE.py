@@ -162,24 +162,10 @@ def our_formula(SMBH_mass, vkick, gamma, rinfl=None):
     Returns:
         formula (units.rate): TDE rate in Myr^-1
     """
-    mass_norm = 1e8 | units.MSun
-    
-    vdisp = 200 * (SMBH_mass/(1.66 * mass_norm))**(1/4.86) | units.kms
-    if rinfl is None:
-        rinfl = constants.G*SMBH_mass/(vdisp**2)
-        
-    rkick = 8. * constants.G*SMBH_mass/vkick**2
-    AVG_STAR_MASS = 2.43578679652 | units.MSun
-    rtide = (0.844**2 * SMBH_mass/AVG_STAR_MASS)**(1./3.) | units.RSun
-    
-    term1 = 0.14 * (SMBH_mass/AVG_STAR_MASS)**((gamma-1)/3) * (vkick/vdisp)**(-2*(gamma-1))
-    term2 = np.log(SMBH_mass/AVG_STAR_MASS) / np.log(rkick/rtide)
-    term3 = (vkick/rkick).value_in(units.Myr**-1)
-    term4 = 11.6*gamma**-1.75 * (constants.G*SMBH_mass/(rinfl*vkick**2.))**(3.-gamma)
-    
-    term_t = term1 * term2 * term3 * term4
-    formula = 31.188711107801634 * term_t # in 1/Myr
-    return formula
+    alpha = (3-gamma) - 1/(4-gamma) * (7/3 - 1 + gamma - 3 + gamma)
+    beta  = 2*gamma - 5 - 1/(4-gamma) * (6 - 2*gamma - 2*gamma)
+    rate = 1749.83318417 * (SMBH_mass.value_in(units.MSun))**alpha * (vkick.value_in(units.kms))**beta
+    return rate
 
 import matplotlib.pyplot as plt
 import matplotlib
@@ -190,13 +176,14 @@ plt.rcParams["font.family"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "cm"
 
 cmap = matplotlib.colormaps['cool']
-colours = cmap(np.linspace(0, 1, 5))
+colours = cmap(np.linspace(0, 1, 6))
 labels = [
     r"$10^5\ {\rm M_{\odot}}$", 
     r"$4 \times\ 10^5 {\rm M_{\odot}}$", 
     r"$10^6\ {\rm M_{\odot}}$", 
     r"$4 \times 10^6\ {\rm M_{\odot}}$", 
-    r"$10^7\ {\rm M_{\odot}}$"
+    r"$10^7\ {\rm M_{\odot}}$",
+    r"$4\times 10^7\ {\rm M_{\odot}}$"
 ]
 gamma = np.linspace(1, 2, 2000)
 
@@ -210,7 +197,7 @@ ax.fill_between(gamma, 1e6*(1e-4), 1e6*(10**-3.5), color="dodgerblue", alpha=0.1
 
 gamma = np.linspace(0.5, 2., 10000)
 min_diff = abs(gamma - 1.75).argmin()
-for i,mass in enumerate([1e5, 4e5, 1e6, 4e6, 1e7]):
+for i,mass in enumerate([1e5, 4e5, 1e6, 4e6, 1e7, 4e7]):
     mass = mass | units.MSun
     vdisp = 200 * (mass/(1.66 * 10**8 | units.MSun))**(1/4.86) | units.kms
     rate_300 = [ ]
@@ -244,12 +231,11 @@ for g in gamma:
 ax.plot(gamma, rate, color=colours[i], zorder=1, lw=2, ls="--")
     
 ax.set_xlim(1., 2.)
-ax.set_ylim(1.01, 1e4)
+ax.set_ylim(9, 1e5)
 ax.set_xlabel(r"$\gamma$", fontsize=14)#
 ax.set_ylabel(r"$\dot{N}$ [Myr$^{-1}$]", fontsize=14)
-ax.legend(fontsize=14, loc="lower right")
+ax.legend(fontsize=14, loc="lower left", ncol=2)
 ax.set_yscale("log")
-ax.legend(fontsize=14)
 ax.tick_params(axis="y", which='both', 
                 direction="in", 
                 labelsize=14)
@@ -258,6 +244,36 @@ ax.tick_params(axis="x", which='both',
                 labelsize=14)
 plt.savefig(f"plot/figures/wang_plot.pdf", dpi=300, bbox_inches='tight')
 plt.clf()
+
+def power_laws(gamma):
+    alpha = (3-gamma) - 1/(4-gamma) * (7/3 - 1 + gamma - 3 + gamma)
+    beta  = 2*gamma - 5 - 1/(4-gamma) * (6 - 2*gamma - 2*gamma)
+    return alpha, beta
+
+gamma = np.linspace(1.01, 1.99, 10000)
+alpha, beta = power_laws(gamma)
+fig, ax = plt.subplots(figsize=(6,5))
+ax.yaxis.set_ticks_position('both')
+ax.xaxis.set_ticks_position('both')
+ax.xaxis.set_minor_locator(mtick.AutoMinorLocator())
+ax.yaxis.set_minor_locator(mtick.AutoMinorLocator())
+ax.plot(gamma, alpha, label=r"$\alpha$", color="black", lw=2)
+ax.plot(gamma, beta, label=r"$\beta$", color="black", ls="-.", lw=2)
+ax.set_xlim(gamma[0], gamma[-1])
+ax.set_xlabel(r"$\gamma$", fontsize=14)#
+ax.set_ylabel(r"Power-law index", fontsize=14)
+ax.legend(fontsize=14, loc="upper right", ncol=1)
+ax.tick_params(axis="y", which='both',
+                direction="in",
+                labelsize=14)
+ax.tick_params(axis="x", which='both',
+                direction="in",
+                labelsize=14)
+plt.savefig(f"plot/figures/power_laws.pdf", dpi=300, bbox_inches='tight')
+plt.clf()
+STOP
+
+
 
 wang_2004(SMBH_mass=1e7 | units.MSun)
 wang_2004(SMBH_mass=1e5 | units.MSun)
