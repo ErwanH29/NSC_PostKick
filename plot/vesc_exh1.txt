@@ -1,0 +1,56 @@
+TDE_IMBH_hot_g175 at z=0.01: 0.20 yr^-1
+TDE_IMBH_hot_g175 at z=0.1: 1.45 yr^-1
+TDE_IMBH_hot_g175 at z=1: 10.03 yr^-1
+TDE_IMBH_hot_g175 at z=2: 11.94 yr^-1
+TDE_IMBH_hot_g175 at z=3: 12.06 yr^-1
+TDE_IMBH_hot_g175 at z=4: 11.91 yr^-1
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+GW_IMBH_hot_g175 at z=0.01: 0.02 yr^-1
+GW_IMBH_hot_g175 at z=0.1: 0.16 yr^-1
+GW_IMBH_hot_g175 at z=1: 1.11 yr^-1
+GW_IMBH_hot_g175 at z=2: 1.33 yr^-1
+GW_IMBH_hot_g175 at z=3: 1.34 yr^-1
+GW_IMBH_hot_g175 at z=4: 1.32 yr^-1
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+TDE_SMBH_hot_g175 at z=0.01: 1.17 yr^-1
+TDE_SMBH_hot_g175 at z=0.1: 7.96 yr^-1
+TDE_SMBH_hot_g175 at z=1: 52.68 yr^-1
+TDE_SMBH_hot_g175 at z=2: 63.35 yr^-1
+TDE_SMBH_hot_g175 at z=3: 64.04 yr^-1
+TDE_SMBH_hot_g175 at z=4: 63.17 yr^-1
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+GW_SMBH_hot_g175 at z=0.01: 0.87 yr^-1
+GW_SMBH_hot_g175 at z=0.1: 5.46 yr^-1
+GW_SMBH_hot_g175 at z=1: 31.04 yr^-1
+GW_SMBH_hot_g175 at z=2: 33.25 yr^-1
+GW_SMBH_hot_g175 at z=3: 33.37 yr^-1
+GW_SMBH_hot_g175 at z=4: 33.22 yr^-1
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+TDE_IMBH_hot_g1 at z=0.01: 0.00 yr^-1
+TDE_IMBH_hot_g1 at z=0.1: 0.00 yr^-1
+TDE_IMBH_hot_g1 at z=1: 0.03 yr^-1
+TDE_IMBH_hot_g1 at z=2: 0.03 yr^-1
+TDE_IMBH_hot_g1 at z=3: 0.03 yr^-1
+TDE_IMBH_hot_g1 at z=4: 0.03 yr^-1
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+GW_IMBH_hot_g1 at z=0.01: 0.00 yr^-1
+GW_IMBH_hot_g1 at z=0.1: 0.00 yr^-1
+GW_IMBH_hot_g1 at z=1: 0.00 yr^-1
+GW_IMBH_hot_g1 at z=2: 0.00 yr^-1
+GW_IMBH_hot_g1 at z=3: 0.00 yr^-1
+GW_IMBH_hot_g1 at z=4: 0.00 yr^-1
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+TDE_SMBH_hot_g1 at z=0.01: 0.00 yr^-1
+TDE_SMBH_hot_g1 at z=0.1: 0.02 yr^-1
+TDE_SMBH_hot_g1 at z=1: 0.16 yr^-1
+TDE_SMBH_hot_g1 at z=2: 0.19 yr^-1
+TDE_SMBH_hot_g1 at z=3: 0.19 yr^-1
+TDE_SMBH_hot_g1 at z=4: 0.19 yr^-1
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+GW_SMBH_hot_g1 at z=0.01: 0.00 yr^-1
+GW_SMBH_hot_g1 at z=0.1: 0.01 yr^-1
+GW_SMBH_hot_g1 at z=1: 0.08 yr^-1
+GW_SMBH_hot_g1 at z=2: 0.08 yr^-1
+GW_SMBH_hot_g1 at z=3: 0.08 yr^-1
+GW_SMBH_hot_g1 at z=4: 0.08 yr^-1
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
