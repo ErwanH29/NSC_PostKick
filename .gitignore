@@ -17,3 +17,5 @@ plot/LISA_Curves
 data/hyperbolic_orbits/
 plot/forecasting/__pycache__
 plot/*.txt
+.vscode/
+.gitignore

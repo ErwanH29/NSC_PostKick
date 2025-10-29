@@ -21,20 +21,26 @@ def get_vesc(mass):
     Returns: Escape velocity in km/s.
     """
     vdisp = get_vdisp(mass)
-    return 3. * vdisp
+    return 5. * vdisp
 
-def get_Mgal_from_Mbh(mass, inverse=True):
+def get_Mbh_from_Mgal(mass):
+    """
+    Haring-Rix relation (BH-Galactic Bulge mass).
+    Args:
+        mass (units.mass): Mass of the BH in solar masses.
+    Returns: Black hole mass in units.mass.
+    """
+    alpha_val = 8.8 + 1.24 * np.log10(mass/(1e11 | units.MSun))
+    return 10**alpha_val | units.MSun
+
+def get_Mgal_from_Mbh(mass):
     """
     Haring-Rix relation (BH-Galactic Bulge mass).
     Args:
         mass (units.mass): Mass of the galaxy in solar masses.
-        inverse (bool):    If True, get galaxy mass from BH mass; else get BH mass from galaxy mass.
     Returns: Black hole mass in units.mass.
     """
-    alpha_val = 8.8 + 1.24 * np.log10(mass/(1e11 | units.MSun))
-    if inverse:  # Get BH mass from galaxy mass
-        return 10**((np.log10(mass.value_in(units.MSun))-8.8)/1.24) * 10**11 | units.MSun
-    return 10**alpha_val | units.MSun
+    return 10**((np.log10(mass.value_in(units.MSun))-8.8)/1.24) * 10**11 | units.MSun
 
 def get_sphere_of_influence(mBH):
     """

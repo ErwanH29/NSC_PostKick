@@ -49,7 +49,7 @@ def gamma_tau(age, M_bh, vkick, gamma, f_dep=0.5):
         M_bh (units.mass):       Mass of the SMBH in solar masses.
         vkick (units.velocity):  Kick velocity in km/s.
         gamma (float):           Power-law index for the mass function.
-        f_dep (float):           Fraction of stars that are disrupted.
+        f_dep (float):           Fraction of stars that collide.
     Returns:
         Total number of events.
     """
@@ -72,31 +72,28 @@ def gamma_tau(age, M_bh, vkick, gamma, f_dep=0.5):
     term_d = alpha/(rSOI**(3/2)/(np.sqrt(constants.G * M_bh)) * (beta)**(gamma-3))
     term_e = 1/(M_bh.value_in(units.MSun)**(1/3) * np.sqrt(constants.G*M_bh)) * (aGW)**(3/2)
     Gamma0_burst = coeff * term_a * term_b * term_c * term_d * term_e / AVG_STAR_MASS * (1/1.3)
-    
+
     ### Compute timescales
     tau_sec = (rSOI**(3/2)/(np.sqrt(constants.G * M_bh)) * (beta)**(gamma-3)) / alpha
-    #tNR_OL  = (M_bh/(1e5 | units.MSun))**(5/4) * (rkick/rSOI)**(1/4) | units.Gyr
     t_exhaust = Nclst/Gamma0_burst
-    t_switch  = t_exhaust / 3.
+    t_switch  = SWITCH_FACTOR * t_exhaust
     if age < t_switch:  # Purely burst
-        dN = Gamma0_burst * tau_sec * (1.0 - np.exp(-age/tau_sec))
-        if dN > f_dep * Nclst:  # Cluster exhausted by observational time
+        Nlost = Gamma0_burst * tau_sec * (1.0 - np.exp(-age/tau_sec))
+        if Nlost > f_dep * Nclst:  # Cluster exhausted more than allowed
             return 0 | units.yr**-1
         return Gamma0_burst * np.exp(-age/tau_sec)
-    else:  # RR phase at measurement time
-        # Don't account for puffing up
-        dN_burst = Gamma0_burst * tau_sec * (1.0 - np.exp(-t_switch/tau_sec))
-
+    else:  # RR phase at measurement time -- Don't account for puffing up
+        Nlost_burst = Gamma0_burst * tau_sec * (1.0 - np.exp(-t_switch/tau_sec))
         CRR = 0.14
         term1 = np.log(M_bh/AVG_STAR_MASS)
         term2 = np.log(rkick/rtide)
         term3 = (vkick/rkick)
-        term4 = (mHCSC - dN_burst * AVG_STAR_MASS) / M_bh  # Remaining mass of HCSC
+        term4 = (mHCSC - Nlost_burst * AVG_STAR_MASS) / M_bh  # Remaining mass of HCSC
         tau_RR = 3.6 * constants.G * M_bh**2 / (vkick**3 * AVG_STAR_MASS)  # From KM08
         Gamma0_RR = CRR * term1/term2 * term3 * term4
         
-        dN = dN_burst + Gamma0_RR * tau_RR * (1.0 - np.exp(-(age - t_switch)/tau_RR))
-        if dN > f_dep * Nclst:  # Cluster exhausted by observational time
+        Nlost = Nlost_burst + Gamma0_RR * tau_RR * (1.0 - np.exp(-(age - t_switch)/tau_RR))
+        if Nlost > f_dep * Nclst:  # Cluster exhausted by observational time
             return 0 | units.yr**-1
-
+        
         return Gamma0_RR * np.exp(-(age - t_switch)/tau_RR)

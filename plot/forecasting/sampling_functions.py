@@ -1,11 +1,10 @@
-import sys
 import numpy as np
-import scipy.integrate as integ
-from scipy.interpolate import interp1d
-from amuse.units import units, constants
+from scipy.interpolate import interp1d 
+from scipy.integrate import cumulative_trapezoid
+from amuse.units import units
 
-from plot.forecasting.forecast_parameters import *
-from plot.forecasting.cosmological_functions import H0, get_Ez, R_gg
+from plot.forecasting.forecast_parameters import phi_star_interp, M_star_interp, alpha_interp
+from plot.forecasting.cosmological_functions import R_gg, get_dt_dz
 
 def sample_mass_from_PS_at_z(zf, mgal_lim, Ngrid=50000):
     """
@@ -34,11 +33,10 @@ def sample_mass_from_PS_at_z(zf, mgal_lim, Ngrid=50000):
     gal_mass_min = mgal_lim[0].value_in(units.MSun)
     gal_mass_max = mgal_lim[1].value_in(units.MSun)
     
-    dm = (mgal_lim[1] - mgal_lim[0]) / Ngrid
     mass_grid = np.linspace(gal_mass_min, gal_mass_max, Ngrid) | units.MSun
     
     ps_vals = press_schechter(zf, mass_grid).value_in(units.Mpc**-3)
-    cdf = np.cumsum(ps_vals) * dm
+    cdf = np.cumsum(ps_vals)
     cdf /= cdf[-1]  # Normalize to create a proper CDF
 
     inv = interp1d(
@@ -46,13 +44,13 @@ def sample_mass_from_PS_at_z(zf, mgal_lim, Ngrid=50000):
         kind='linear',  bounds_error=False,
         fill_value=(gal_mass_min, gal_mass_max)
     )
-    gal_mass = float(inv(np.random.rand()))
-    return gal_mass | units.MSun
+    return float(inv(np.random.rand())) | units.MSun
 
 def sample_kick_velocity(vkick_bins, kick_probs):
     idx = np.random.choice(len(kick_probs), p=kick_probs)
-    v0, v1 = vkick_bins[idx], vkick_bins[idx+1]
-    return (np.random.uniform(v0, v1)) | units.kms
+    v0 = vkick_bins[idx]
+    v1 = vkick_bins[idx + 1]
+    return np.random.uniform(v0, v1) | units.kms
 
 def sample_BBH_merger(z, Rm_interp):
     """
@@ -66,32 +64,32 @@ def sample_BBH_merger(z, Rm_interp):
     merger_rate_density = Rm_interp(z) | units.yr**-1 * (units.Gpc)**-3
     return merger_rate_density
 
-def sample_redshifts(z_min, z_max, Rm_interp, Nsamples):
+def sample_redshifts(z_min, z_max, Rm_gg, Nsamples):
     """
     Sample formation redshifts between z_min and z_max based on the merger rate density.
     Args:
         z_min (float):    Minimum redshift.
         z_max (float):    Maximum redshift.
-        Rm_interp (function): Interpolator for the merger rate.
+        Rm_gg (function): Interpolator for the BH-BH merger rate.
         Nsamples (int):   Number of redshift samples to generate.
     Returns:
         z_form_samples (array): Sampled formation redshifts.
         z_grid (array):    Grid of redshifts used for sampling.
     """
     z_grid = np.linspace(z_min, z_max, Nsamples)
-    w  = R_gg(z_grid, Rm_interp) / ((1.0 + z_grid) * H0 * get_Ez(z_grid))
-    W  = np.cumsum(w)
-    if W[-1] < 0 | units.m**-3:
-        print("Error: Non-positive total weight in redshift sampling.")
-        print("zmin:", z_min, "zmax:", z_max)
-        sys.exit(-1)
-    cdf = np.cumsum(w)
-    cdf /= cdf[-1]
+    R_gg_grid  = R_gg(z_grid, Rm_gg)
+    weights = R_gg_grid * get_dt_dz(z_grid)
+    weights = weights.value_in(units.Gpc**-3)
+
+    cdf = cumulative_trapezoid(weights, z_grid, initial=0)
+    integrand = cdf[-1]
+    cdf /= integrand
     
     u = np.random.rand(Nsamples)
     z_form_samples = np.interp(u, cdf, z_grid)
     nan_mask = np.isnan(z_form_samples)
     if np.any(nan_mask):
         z_form_samples[nan_mask] = z_max
+    norm_C = integrand | (units.Gpc**-3)  # Gives number of HCSC per comoving volume
 
-    return z_form_samples, z_grid
+    return z_form_samples, norm_C

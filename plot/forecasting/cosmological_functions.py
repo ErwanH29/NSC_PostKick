@@ -18,7 +18,7 @@ def get_look_back(z):
     """
     integrand = lambda zp: (1.0 / ((1.0 + zp) * get_Ez(zp)))
     val = integ.quad(integrand, 0., z)[0]  # dimensionless
-    return (val / H0).in_(units.yr)
+    return val/H0
 
 def get_cosmic_time(z):
     """
@@ -52,7 +52,7 @@ def get_dV_dz(z):
     Returns: Comoving volume element in units.length**3.
     """
     Dc = get_comoving_distance(z)
-    dV_dz = 4 * np.pi * (constants.c / H0) * Dc**2 / get_Ez(z)
+    dV_dz = (4 * np.pi) * (constants.c / H0) * Dc**2 / get_Ez(z)
     return dV_dz
 
 def get_dt_dz(z):
@@ -62,7 +62,7 @@ def get_dt_dz(z):
         z (float): Redshift.
     Returns: dt/dz in units.time.
     """
-    Hz = H0 * np.sqrt(OMEGA_M * (1+z)**3 + OMEGA_L)
+    Hz = H0 * get_Ez(z)
     dt_dz = 1.0 / ((1.0 + z) * Hz)
     return (dt_dz.in_(units.yr))
 

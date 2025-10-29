@@ -8,8 +8,7 @@ AVG_STAR_MASS  = 1 | units.MSun
 AVG_STAR_RAD   = 1 | units.RSun
 TDE_FACTOR     = 0.9
 SWITCH_FACTOR  = 1/3
-DEPLETE_FACTOR = 0.75
-H0  = 67.4 | (units.kms/units.Mpc)
+H0 = 67.4 | (units.kms/units.Mpc)
 OMEGA_M = 0.303
 OMEGA_L = 0.697
 
@@ -23,20 +22,34 @@ M_star_interp   = interp1d(z_bins, M_norm, kind='linear', fill_value='extrapolat
 alpha_interp    = interp1d(z_bins, alpha_values, kind='linear', fill_value='extrapolate')
 
 ### Binary BH merger rates -- Fig. 10: https://arxiv.org/pdf/2412.15334
-merger_rate_zbins = [0, 0.75, 1.25, 2, 2.6, 3.5, 4.0, 5.0, 6.0, 7.0]
-merger_rate = [  
-    [0.0006, 0.0007, 0.0037, 0.0020, 0.0055, 0.002,  0., 0., 0., 0.],  # IMBH-IMBH
-    [0.0007, 0.0004, 0.0027, 0.0020, 0.0050, 0.,     0., 0., 0., 0.]   # SMBH-SMBH, 
-]  # in yr^-1 Gpc^-3
+# First element: IMBH-IMBH merger rate   [yr^-1 Gpc^-3]
+# Second element: SMBH-SMBH merger rate  [yr^-1 Gpc^-3]
+merger_rate = { 
+    0.00: [0.0006, 0.0007],
+    0.75: [0.0007, 0.0004],
+    1.25: [0.0037, 0.0027],
+    2.00: [0.0020, 0.0020],
+    2.75: [0.0055, 0.0050],
+    3.50: [0.0020, 0.0000],
+    4.00: [0.0000, 0.0000],
+    4.75: [0.0025, 0.0000],
+    6.00: [0.0000, 0.0000],
+    7.00: [0.0000, 0.0000],
+} # in yr^-1 Gpc^-3
+
+z_vals = np.array(list(merger_rate.keys()))
+rate_values = np.array(list(merger_rate.values()))
+
 merger_rate_IMBH = interp1d(
-    merger_rate_zbins,
-    merger_rate[0],
+    z_vals,
+    rate_values[:, 0],
     kind='linear',
     fill_value='extrapolate'
 )
+
 merger_rate_SMBH = interp1d(
-    merger_rate_zbins,
-    merger_rate[1],
+    z_vals,
+    rate_values[:, 1],
     kind='linear',
     fill_value='extrapolate'
 )
@@ -47,6 +60,6 @@ Prob_Distr = {
     "Hot Kick PDF":  [0.342593, 0.211364, 0.116901, 0.078400, 0.057590, 0.140283, 0.040183, 0.010309],
     "Cold Kick CDF": [0.414482, 0.283502, 0.125030, 0.070967, 0.042490, 0.059309, 0.004030, 0.000185]
 }
-vkick_bins      = np.array(Prob_Distr["Kick Lower Limit"], dtype=float)
+vkick_bins = np.array(Prob_Distr["Kick Lower Limit"], dtype=float)
 Prob_Distr["Hot Kick PDF"] = np.array(Prob_Distr["Hot Kick PDF"], dtype=float)
 Prob_Distr["Hot Kick PDF"] /= Prob_Distr["Hot Kick PDF"].sum()
