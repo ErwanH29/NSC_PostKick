@@ -66,7 +66,18 @@ def sample_BBH_merger(z, Rm_interp):
     merger_rate_density = Rm_interp(z) | units.yr**-1 * (units.Gpc)**-3
     return merger_rate_density
 
-def sample_redshifts(z_min, z_max, Rm_interp, Nsamples=1000):
+def sample_redshifts(z_min, z_max, Rm_interp, Nsamples):
+    """
+    Sample formation redshifts between z_min and z_max based on the merger rate density.
+    Args:
+        z_min (float):    Minimum redshift.
+        z_max (float):    Maximum redshift.
+        Rm_interp (function): Interpolator for the merger rate.
+        Nsamples (int):   Number of redshift samples to generate.
+    Returns:
+        z_form_samples (array): Sampled formation redshifts.
+        z_grid (array):    Grid of redshifts used for sampling.
+    """
     z_grid = np.linspace(z_min, z_max, Nsamples)
     w  = R_gg(z_grid, Rm_interp) / ((1.0 + z_grid) * H0 * get_Ez(z_grid))
     W  = np.cumsum(w)
@@ -81,7 +92,6 @@ def sample_redshifts(z_min, z_max, Rm_interp, Nsamples=1000):
     z_form_samples = np.interp(u, cdf, z_grid)
     nan_mask = np.isnan(z_form_samples)
     if np.any(nan_mask):
-        print("Warning: NaN values encountered in redshift sampling.")
-        z_form_samples = z_form_samples[~nan_mask]
+        z_form_samples[nan_mask] = z_max
 
     return z_form_samples, z_grid

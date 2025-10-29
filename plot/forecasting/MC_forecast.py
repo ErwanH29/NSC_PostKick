@@ -31,15 +31,14 @@ def compute_rate_density(z_obs, gal_mass, gamma, zmax, Nsamples, Rm_gg):
         z_min=z_obs, 
         z_max=zmax, 
         Rm_interp=Rm_gg, 
-        Nsamples=40
+        Nsamples=2000
     )
-    print(f"Sampled {len(zf_values)} formation redshifts between z={z_obs:.2f} and z={zmax:.2f}")
-    print(f"z_grid: {z_grid[0]:.2f} - {z_grid[-1]:.2f}")
+    print(f"\nFormation redshifts z [{z_obs:.2f}, {zmax:.2f}]")
 
-    TDE_results = 0.0 | units.yr**-1 / units.Mpc**3
-    GW_results  = 0.0 | units.yr**-1 / units.Mpc**3
+    TDE_rates_at_z = []
+    GW_rates_at_z  = []
     for zform in zf_values:
-        print(f"Sampling zf={zform:.2f} between z_obs={z_obs:.2f} and zmax={zmax:.2f}, gamma={gamma}", end="\r", flush=True)
+        print(f"\r    Sampling zf={zform:.2f}", end="", flush=True)
         tform = get_cosmic_time(zform)
         tau = t_obs - tform  # Time delay between formation z and observed z
         if tau < 0 | units.yr:
@@ -56,30 +55,30 @@ def compute_rate_density(z_obs, gal_mass, gamma, zmax, Nsamples, Rm_gg):
             if zform > 4.0:  # No mergers at high z per Kritos et al. 2025
                 TDE_rate_i.append(0.0 | units.yr**-1)
                 GW_rate_i.append(0.0 | units.yr**-1)
-            else:
-                Mgal = sample_mass_from_PS_at_z(zform, mgal_lim=gal_mass)
-                M_bh = get_Mgal_from_Mbh(Mgal, inverse=False)
-                v_kick = sample_kick_velocity(
-                    vkick_bins=Prob_Distr["Kick Lower Limit"],
-                    kick_probs=Prob_Distr["Hot Kick PDF"]
-                )
+                continue
 
-                v_esc = get_vesc(M_bh)
-                if v_kick < v_esc:
-                    TDE_rate_i.append(0.0 | units.yr**-1)
-                    GW_rate_i.append(0.0 | units.yr**-1)
-                else: # Get rate for the probabilistically sampled HCSC
-                    rate = gamma_tau(tau, M_bh, v_kick, gamma, f_dep=0.5)
-                    if M_bh > 1e8 | units.MSun:
-                        GW_rate_i.append(rate)
-                        TDE_rate_i.append(0. * rate)  # rISCO > rTDE
-                    else:
-                        TDE_rate_i.append(TDE_FACTOR * rate)
-                        GW_rate_i.append((1. - TDE_FACTOR) * rate)
+            Mgal = sample_mass_from_PS_at_z(zform, mgal_lim=gal_mass)
+            M_bh = get_Mgal_from_Mbh(Mgal, inverse=False)
+            v_kick = sample_kick_velocity(
+                vkick_bins=Prob_Distr["Kick Lower Limit"],
+                kick_probs=Prob_Distr["Hot Kick PDF"]
+            )
+
+            if v_kick < get_vesc(M_bh):
+                TDE_rate_i.append(0.0 | units.yr**-1)
+                GW_rate_i.append(0.0 | units.yr**-1)
+            else: # Get rate for the probabilistically sampled HCSC
+                rate = gamma_tau(tau, M_bh, v_kick, gamma, f_dep=0.5)
+                if M_bh > 1e8 | units.MSun:
+                    GW_rate_i.append(rate)
+                    TDE_rate_i.append(0. * rate)  # rISCO > rTDE
+                else:
+                    TDE_rate_i.append(TDE_FACTOR * rate)
+                    GW_rate_i.append((1. - TDE_FACTOR) * rate)
 
         # Get rates typical of HCSC observed at z_form
-        TDE_mean_rate = np.mean(TDE_rate_i)
-        GW_mean_rate  = np.mean(GW_rate_i)
+        TDE_rates_at_z.append(np.mean(TDE_rate_i))
+        GW_rates_at_z.append(np.mean(GW_rate_i))
 
     coeff_a = R_gg(z=z_grid, Rm_interp=Rm_gg).value_in(units.yr**-1 * units.Mpc**-3)
     coeff_b = np.abs(get_dt_dz(z_grid).value_in(units.yr))
@@ -87,8 +86,8 @@ def compute_rate_density(z_obs, gal_mass, gamma, zmax, Nsamples, Rm_gg):
     coeff = np.trapezoid(weights, z_grid) | units.Mpc**-3
 
     # Multiply typical rate with total number of HCSC formed by zform
-    TDE_results = coeff * TDE_mean_rate
-    GW_results  = coeff * GW_mean_rate
+    TDE_results = coeff * np.mean(TDE_rates_at_z)
+    GW_results  = coeff * np.mean(GW_rates_at_z)
     return TDE_results, GW_results
 
 def compute_rate(z_obs, gal_mass, gamma, Nsamples, Rm_gg, zmax):
@@ -139,11 +138,11 @@ def cumulative_rate(gal_mass, Rm_gg, z_grid, gamma=1.75, zmax=7.0, Nsamples=1000
             Rm_gg=Rm_gg
         )
         if iz == 0:
-            TDE_cumulative[iz] = dNdz_TDE * dz
-            GW_cumulative[iz]  = dNdz_GW  * dz
+            TDE_cumulative[iz] = dNdz_TDE
+            GW_cumulative[iz]  = dNdz_GW
         else:
-            TDE_cumulative[iz] = TDE_cumulative[iz-1] + dNdz_TDE * dz
-            GW_cumulative[iz]  = GW_cumulative[iz-1]  + dNdz_GW  * dz
+            TDE_cumulative[iz] = dNdz_TDE
+            GW_cumulative[iz]  = dNdz_GW
 
     return TDE_cumulative, GW_cumulative
 
@@ -156,7 +155,7 @@ galaxy_masses = [
      get_Mgal_from_Mbh(1e9 | units.MSun).value_in(units.MSun)] | units.MSun
 ]      
 
-z_array = np.linspace(0, 3.999, 8)
+z_array = np.linspace(0, 4, 8)
 plt.rcParams["font.family"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "cm"
 colours = ["tab:red", "tab:blue"]
@@ -164,7 +163,7 @@ labels = [
     r"$10^{5} < M_{\rm SMBH} < 5\times10^{5}$ M$_\odot$",
     r"$10^{6} < M_{\rm SMBH} < 10^{9}$ M$_\odot$",
 ]
-colours = ["red", "blue", "tab:red", "tab:blue"]
+colours = ["tab:red", "tab:blue", "red", "blue"]
 
 ## Idx 0: Gamma = 1.75, Mgal = 10^5-5x10^5 MSun
 ## Idx 1: Gamma = 1.75, Mgal = 10^6-10^9   MSun
@@ -172,7 +171,9 @@ colours = ["red", "blue", "tab:red", "tab:blue"]
 ## Idx 3: Gamma = 1.0,  Mgal = 10^6-10^9   MSun
 fig, ax = plt.subplots(figsize=(8, 6))
 for ig, gamma in enumerate([1.75, 1.0]):
+    print(f"Gamma = {gamma}")
     for im, gal_mass in enumerate(galaxy_masses):
+        print(f"  Mgal > {gal_mass[0]}")
         if im == 0:
             Rm_interp = merger_rate_IMBH
         else:
@@ -186,8 +187,14 @@ for ig, gamma in enumerate([1.75, 1.0]):
             zmax=7.0, 
             Nsamples=100
         )
+        print("Colour:", colours[ig+im*2])
         ax.plot(z_array, TDEcum.value_in(units.yr**-1), ls='-', color=colours[ig+im*2], label='TDEs')
         ax.plot(z_array, GWcum.value_in(units.yr**-1), ls='--', color=colours[ig+im*2], label='GWs')
 ax.scatter([], [], color=colours[0], label=labels[0])
-ax.scatter([], [], color=colours[1], label=labels[1])
+ax.scatter([], [], color=colours[1], label=labels[2])
+ax.set_yscale('log')
+ax.set_xscale('log')
+ax.set_xlabel(r"$z$", fontsize=16)
+ax.set_ylabel(r"$\Gamma$ [yr$^{-1}$]", fontsize=16)
+ax.legend(fontsize=12)
 plt.show()

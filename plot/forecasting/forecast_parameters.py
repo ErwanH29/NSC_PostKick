@@ -43,7 +43,7 @@ merger_rate_SMBH = interp1d(
 
 ### Probability Distributions -- Table VIII: https://arxiv.org/pdf/1201.1923
 Prob_Distr = {
-    "Kick Lower Limit": [    0,     100,      200,       300,      400,      500,     1000,     1500,    2000],
+    "Kick Lower Limit": [    0,      100,      200,      300,     400,       500,     1000,     1500,    2000],
     "Hot Kick PDF":  [0.342593, 0.211364, 0.116901, 0.078400, 0.057590, 0.140283, 0.040183, 0.010309],
     "Cold Kick CDF": [0.414482, 0.283502, 0.125030, 0.070967, 0.042490, 0.059309, 0.004030, 0.000185]
 }
