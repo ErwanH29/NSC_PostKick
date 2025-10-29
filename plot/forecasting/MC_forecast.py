@@ -31,7 +31,7 @@ def compute_rate_density(z_obs, gal_mass, gamma, zmax, Nsamples, Rm_gg):
         z_min=z_obs, 
         z_max=zmax, 
         Rm_interp=Rm_gg, 
-        Nsamples=2000
+        Nsamples=20
     )
     print(f"\nFormation redshifts z [{z_obs:.2f}, {zmax:.2f}]")
 
@@ -141,8 +141,8 @@ def cumulative_rate(gal_mass, Rm_gg, z_grid, gamma=1.75, zmax=7.0, Nsamples=1000
             TDE_cumulative[iz] = dNdz_TDE
             GW_cumulative[iz]  = dNdz_GW
         else:
-            TDE_cumulative[iz] = dNdz_TDE
-            GW_cumulative[iz]  = dNdz_GW
+            TDE_cumulative[iz] = TDE_cumulative[0] - dNdz_TDE
+            GW_cumulative[iz]  = GW_cumulative[0] - dNdz_GW
 
     return TDE_cumulative, GW_cumulative
 
@@ -191,9 +191,8 @@ for ig, gamma in enumerate([1.75, 1.0]):
         ax.plot(z_array, TDEcum.value_in(units.yr**-1), ls='-', color=colours[ig+im*2], label='TDEs')
         ax.plot(z_array, GWcum.value_in(units.yr**-1), ls='--', color=colours[ig+im*2], label='GWs')
 ax.scatter([], [], color=colours[0], label=labels[0])
-ax.scatter([], [], color=colours[1], label=labels[2])
+ax.scatter([], [], color=colours[2], label=labels[1])
 ax.set_yscale('log')
-ax.set_xscale('log')
 ax.set_xlabel(r"$z$", fontsize=16)
 ax.set_ylabel(r"$\Gamma$ [yr$^{-1}$]", fontsize=16)
 ax.legend(fontsize=12)
