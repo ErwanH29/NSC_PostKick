@@ -40,7 +40,7 @@ def get_Porb(mBH, r):
     """
     return 2 * np.pi * np.sqrt(r**3 / (constants.G * mBH))
 
-def gamma_tau(age, M_bh, vkick, gamma, f_dep=0.5):
+def gamma_tau(age, M_bh, vkick, gamma, f_dep=0.5, RR=False):
     """
     Compute event rate from fit. 
     Total events assuming exhausted after 20 Myr.
@@ -50,6 +50,7 @@ def gamma_tau(age, M_bh, vkick, gamma, f_dep=0.5):
         vkick (units.velocity):  Kick velocity in km/s.
         gamma (float):           Power-law index for the mass function.
         f_dep (float):           Fraction of stars that collide.
+        RR (boolean):            Whether to calculate purely assuming RR.
     Returns:
         Total number of events.
     """
@@ -59,6 +60,21 @@ def gamma_tau(age, M_bh, vkick, gamma, f_dep=0.5):
     mHCSC = get_mHCSC(M_bh, vkick, gamma, rSOI)
     rkick = get_rkick(M_bh, vkick)
     Nclst = mHCSC / AVG_STAR_MASS
+
+    if RR:
+        CRR = 0.14
+        term1 = np.log(M_bh/AVG_STAR_MASS)
+        term2 = np.log(rkick/rtide)
+        term3 = (vkick/rkick)
+        term4 = mHCSC / M_bh  # Remaining mass of HCSC
+        tau_RR = 3.6 * constants.G * M_bh**2 / (vkick**3 * AVG_STAR_MASS)  # From KM08
+        Gamma0_RR = CRR * term1/term2 * term3 * term4
+
+        Nlost = Gamma0_RR * tau_RR * (1.0 - np.exp(-age/tau_RR))
+        if Nlost > f_dep * Nclst:  # Cluster exhausted by observational time
+            return 0 | units.yr**-1
+        
+        return Gamma0_RR * np.exp(-(age - t_switch)/tau_RR)
 
     ### Burst Phase ###
     # Coeff absorbs factor of mClump, zeta (rinfl = zeta a_GW), beta for a_i vs. a_clump, k for RHill, ecc_phi for interaction time

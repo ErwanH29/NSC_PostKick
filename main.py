@@ -28,10 +28,10 @@ def run_code(file, eta, tend, config, run_no, resume):
     no_files = 0
     if (resume):
         snapshot_files = os.path.join(
-                config.split("config")[0], 
-                "simulation_snapshot", 
-                "config"+config.split("config")[1]
-                )
+            config.split("config")[0], 
+            "simulation_snapshot", 
+            "config"+config.split("config")[1]
+            )
         file = (sort_files(snapshot_files))[-1]
         
     pset = read_set_from_file(file, "hdf5")
@@ -54,11 +54,11 @@ def run_code(file, eta, tend, config, run_no, resume):
     output_dir = config.split("config")[0]
     code_conv = nbody_system.nbody_to_si(pset.mass.sum(), 1 | units.pc)
     evolve_system = EvolveSystem(
-                        pset, tend, eta, code_conv,
-                        no_worker=30, dir_path=output_dir,
-                        fname=fname, no_files=no_files,
-                        resume=resume
-                        )
+        pset, tend, eta, code_conv,
+        no_worker=30, dir_path=output_dir,
+        fname=fname, no_files=no_files,
+        resume=resume
+        )
     evolve_system.initialise_code()
     evolve_system.run_code()
 

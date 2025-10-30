@@ -1,315 +1,143 @@
-from amuse.lab import units, constants
+from amuse.lab import *
 import numpy as np
-import matplotlib.ticker as mtick
-
-def sphere_of_influence(SMBH_mass):
-    """
-    Extract sphere of influence
-    Args:
-        SMBH_mass (units.mass): Mass of the SMBH
-    Returns:
-        rinfl (units.length): Sphere of influence radius in parsecs
-    """
-    vdisp = 200. * (SMBH_mass/(1.66 * 10**8 | units.MSun))**(1./4.86) | units.kms
-    rinfl = constants.G*SMBH_mass/vdisp**2.
-    return rinfl
-
-def cluster_mass(SMBH_mass, vkick):
-    """
-    Extract HCSC mass
-    Args:
-        SMBH_mass (units.mass): Mass of the SMBH
-        vkick (units.velocity): Kick velocity of the ejected stars
-    Returns:
-        mcluster (units.mass): Mass of the HCSC
-    """
-    rinfl = sphere_of_influence(SMBH_mass)
-    mcluster = 11.6*GAMMA**-1.75 * SMBH_mass * (constants.G*SMBH_mass/(rinfl*vkick**2.))**(3. - GAMMA)
-    return mcluster
-
-def tidal_radius(SMBH_mass):
-    """
-    Extract tidal radius
-    Args:
-        SMBH_mass (units.mass): Mass of the SMBH
-    Returns:
-        rtide (units.length): Tidal radius in solar radii
-    """
-    rstar = (AVG_STELLAR_MASS.value_in(units.MSun))**0.8
-    rtide = rstar*(0.844*SMBH_mass/(AVG_STELLAR_MASS))**(1./3.) | units.RSun
-    return rtide
-
-def stone_2017(SMBH_mass, vdisp, vkick, rcluster):
-    """
-    Extract TDE rate. Based on Stone 2017.
-    Args:
-        SMBH_mass (units.mass): Mass of the SMBH
-        vdisp (units.velocity): Dispersion velocity of stars in the cluster
-        vkick (units.velocity): Kick velocity of the ejected stars
-        rcluster (units.length): Radius of the cluster
-    """
-    stellar_tide = tidal_radius(SMBH_mass)
-    mcluster = cluster_mass(SMBH_mass, vkick)
-    
-    number_density = mcluster/(4./3.*np.pi*rcluster**3.) * 1/(AVG_STELLAR_MASS)
-    cross_section = np.pi*stellar_tide**2.*(1.+2.*constants.G*SMBH_mass/(stellar_tide*vdisp**2.))
-    TDE_rate = number_density*cross_section*vdisp
-    print(f"Stone 2017 TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, vkick = {vkick.in_(units.kms)}, {TDE_rate.in_(1/units.kyr)}")
-
-def rizzuto_2023(SMBH_mass, vdisp, vkick, rcluster):
-    """
-    Extract TDE rate. Based on Rizzuto et al. 2023.
-    Args:
-        SMBH_mass (units.mass): Mass of the SMBH
-        vdisp (units.velocity): Dispersion velocity of stars in the cluster
-        vkick (units.velocity): Kick velocity of the ejected stars
-        rcluster (units.length): Radius of the cluster
-    """
-    mass_norm = 1e3 | units.MSun
-    dens_norm = 1e7 | units.MSun/units.pc**3
-    vels_norm = 100 | units.kms
-    
-    mcluster = cluster_mass(SMBH_mass, vkick)
-    fbound = 1  # Fraction of stars within the sphere of influence bound to SMBH (here rHCSC)
-    density = mcluster/(4./3.*np.pi*rcluster**3.)
-    
-    TDE_rate = 1.1*0.8*fbound * np.log(0.22*SMBH_mass/AVG_STELLAR_MASS) \
-               * (SMBH_mass/mass_norm) * (density/dens_norm) \
-               * (vdisp/vels_norm)**-3 | units.Myr**-1
-    print(f"Rizzuto et al. 2023 TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}, vkick = {vkick.in_(units.kms)}, {TDE_rate.in_(1/units.kyr)}")
-
-def komossa_2008(SMBH_mass, vdisp, vkick, rcluster):
-    """
-    Extract TDE rate. Based on Komossa & Merritt 2008.
-    Args:
-        SMBH_mass (units.mass): Mass of the SMBH
-        vdisp (units.velocity): Dispersion velocity of stars in the cluster
-        vkick (units.velocity): Kick velocity of the ejected stars
-        rcluster (units.length): Radius of the cluster
-    """
-    mass_norm = 1e7 | units.MSun
-    vels_norm = 1000 | units.kms
-    fbnd_norm = 1e-3
-    
-    stellar_tide = tidal_radius(SMBH_mass)
-    RCLUSTER = constants.G*SMBH_mass/vkick**2
-    fbound = cluster_mass(SMBH_mass, vkick) / SMBH_mass
-    mcluster = cluster_mass(SMBH_mass, vkick)
-    C_RR = 0.14
-    
-    lnL = np.log(SMBH_mass/AVG_STELLAR_MASS)
-    lnR = np.log(RCLUSTER/stellar_tide)
-    
-    TDE_rate = C_RR * lnL/lnR * (vkick/RCLUSTER) * fbound
-    print(f"Komossa & Merritt 2008 TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}", end=", ") 
-    print(f"vkick = {vkick.in_(units.kms)}", end=", ")
-    print(f"{TDE_rate.in_(1/units.kyr)}")
-    
-    TDE_rate = 6.5e-3 * (SMBH_mass/mass_norm)**-1 * (vkick/vels_norm)**3 * (fbound/fbnd_norm) | units.kyr**-1
-    print(f"Komossa & Merritt 2008 TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}", end=", ")
-    print(f"vkick = {vkick.in_(units.kms)}", end=", ")
-    print(f"{TDE_rate.in_(1/units.kyr)}")
-    
-    N = cluster_mass(SMBH_mass, vkick)/AVG_STELLAR_MASS
-    TDE_rate = np.pi/np.sqrt(2) * N*constants.G**2 \
-               * AVG_STELLAR_MASS * lnL/(vdisp**3 * lnR) \
-               * (SMBH_mass+mcluster)/(4/3 * np.pi * rcluster**3)
-    TDE_rate *= SMBH_mass/(N*AVG_STELLAR_MASS)
-    print(f"Modified Komossa & Merritt 2008 TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}", end=", ")
-    print(f"vkick = {vkick.in_(units.kms)}", end=", ")
-    print(f"{TDE_rate.in_(1/units.kyr)}")
-    
-    N = cluster_mass(SMBH_mass, vkick)/AVG_STELLAR_MASS
-    fbound = cluster_mass(SMBH_mass, vkick) / SMBH_mass
-    volume = 4/3 * np.pi * rcluster**3
-    TDE_rate = (np.pi*constants.G**2*AVG_STELLAR_MASS*mcluster*lnL)/(np.sqrt(2)*vdisp**3 * volume) \
-                * N/(lnR*fbound) * SMBH_mass/(N*AVG_STELLAR_MASS)
-    print(f"Modified Komossa & Merritt 2008 TDE rate: MSMBH = {SMBH_mass.in_(units.MSun)}", end=", ")
-    print(f"vkick = {vkick.in_(units.kms)}", end=", ")
-    print(f"{TDE_rate.in_(1/units.kyr)}")
-    
-    density = 2.6e7 | units.MSun/units.pc**3  # Schodel (2018) from MW
-    unbound_rate = 2*np.pi*constants.G*SMBH_mass*(density/AVG_STELLAR_MASS) * vkick**-1 * stellar_tide
-    print(f"Unbound rate: MSMBH = {SMBH_mass.in_(units.MSun)}", end=", ")
-    print(f"vkick = {vkick.in_(units.kms)}", end=", ")
-    print(f"{unbound_rate.in_(1/units.kyr)}")
-    
-def wang_2004(SMBH_mass, gamma):
-    """
-    Extract TDE rate for NSC (unrecoiled)
-    Args:
-        SMBH_mass (units.mass): Mass of the SMBH
-        gamma (float): Power-law index of the density profile
-    Returns:
-        TDE_rate (units.rate): TDE rate in Myr^-1
-    """
-    vels_norm = 70 | units.kms
-    mass_norm = 1e6 | units.MSun
-    
-    alpha = (27-19*gamma)/(6*(4-gamma))
-    vdisp = 200 * (SMBH_mass/(1.66 * 10**8 | units.MSun))**(1/4.86) | units.kms
-    TDE_rate = 7.1e-4*(vdisp/vels_norm)**3.5*(SMBH_mass/mass_norm)**alpha | units.yr**-1
-    return TDE_rate
-
-def our_formula(SMBH_mass, vkick, gamma, rinfl=None):
-    """
-    Extract TDE rate based on our formula.
-    Args:
-        SMBH_mass (units.mass): Mass of the SMBH
-        vkick (units.velocity): Kick velocity of the ejected stars
-        gamma (float): Power-law index of the density profile
-        rinfl (units.length, optional): Sphere of influence radius. If None, it is calculated.
-    Returns:
-        formula (units.rate): TDE rate in Myr^-1
-    """
-    alpha = (3-gamma) - 1/(4-gamma) * (7/3 - 1 + gamma - 3 + gamma)
-    beta  = 2*gamma - 5 - 1/(4-gamma) * (6 - 2*gamma - 2*gamma)
-    rate = 1749.83318417 * (SMBH_mass.value_in(units.MSun))**alpha * (vkick.value_in(units.kms))**beta
-    return rate
-
 import matplotlib.pyplot as plt
-import matplotlib
 
-AVG_STELLAR_MASS = 3.07 | units.MSun
-GAMMA = 1.75
+from plot.plot_class import SetupFig
+
+MSTAR = 1 | units.MSun
+RSTAR = 1 | units.RSun
+eta = 0.844
+
+
+def get_mHCSC(mBH, vkick, gamma, rSOI=None):
+    """
+    Gets the mass of the hyper-compact stellar cluster (HCSC)
+    Args:
+        mBH (mass):        Mass of the black hole
+        vkick (velocity):  Kick velocity of the black hole
+        gamma (float):     Density profile of initial NSC
+        rSOI (length):     Sphere of influence radius (optional)
+    Returns: Mass of the HCSC
+    """
+    if rSOI is None:
+        rSOI = get_sphere_of_influence(mBH)
+    F1 = 11.6 * gamma **-1.75
+    term = F1 * mBH * ((constants.G * mBH)/(vkick**2. * rSOI))**(3. - gamma)
+    return term
+
+def get_vdisp(mBH):
+    """
+    Gets the velocity dispersion within the sphere of influence
+    Args:
+        mBH (mass):  Mass of the black hole
+    Returns: Velocity dispersion
+    """
+    return 200 | units.kms * (mBH / (1.66e8 | units.MSun))**(1/4.86)
+
+def get_sphere_of_influence(mBH):
+    """
+    Gets the sphere of influence of the black hole
+    Args:
+        mBH (mass):  Mass of the black hole
+    Returns: Sphere of influence radius
+    """
+    sigma = get_vdisp(mBH)
+    return constants.G * mBH / sigma**2
+
+def get_rkick(mBH, vkick):
+    """
+    Gets the initial HCSC radius
+    Args:
+        mBH (mass):  Mass of the black hole
+        vkick (velocity):  Kick velocity of the black hole
+    Returns: Radius of the HCSC
+    """
+    return (8 * constants.G * mBH) / (vkick**2)
+
+def KM08_event_rate(mBH, vkick, gamma):
+    """
+    Gets the tidal disruption event rate from Komossa & Merritt (2008)
+    Args:
+        mBH (mass):  Mass of the black hole
+        vkick (velocity):  Kick velocity of the black hole
+        gamma (float):     Density profile of initial NSC
+    Returns: TDE rate
+    """
+    fbound = get_mHCSC(mBH, vkick, gamma, rSOI=3 | units.pc) / mBH
+    value = 6.5e-6 * (mBH/(1e7 | units.MSun))**(-1) * (vkick/(1000 | units.kms))**3 * fbound/10**-3 | units.yr**-1
+    return value
+
+def event_rate(vkick, mBH, gamma):
+    """
+    Gets the tidal disruption event rate from numerical results
+    Args:
+        vkick (velocity):  Kick velocity of the black hole
+        mBH (mass):        Mass of the black hole
+        gamma (float):     Density profile of initial NSC
+    Returns: TDE rate
+    """
+    ### Coeff absorbs factor of:
+    # mClump, zeta (rinfl = zeta a_GW), 
+    # beta for a_i vs. a_clump, 
+    # k for RHill, ecc_phi for interaction time
+
+    coeff = 2.61841299e+05
+    alpha = 6.41880928e-04
+    beta  = 9.55159492e+00
+    gamma = np.float128(gamma)
+
+    rtide = RSTAR * (eta**2 * mBH / MSTAR)**(1/3)
+    rSOI = get_sphere_of_influence(mBH)
+    aGW = 2*10**-4 * rSOI
+
+    term_a = (3-gamma) * constants.G * mBH**2 * rtide**0.5
+    term_b = (8*rSOI)**(gamma-3) * vkick**-1
+    term_c = aGW**(-(gamma-0.5)) * ((2*((2*gamma+3)*((2*gamma+1) - 4*gamma + 2) + 4*gamma**2 - 1))/((2*gamma - 1)*(2*gamma + 1)*(2*gamma + 3)))
+    term_d = alpha/(rSOI**(3/2)/(np.sqrt(constants.G * mBH)) * (beta)**(gamma-3))
+    term_e = 1/(mBH.value_in(units.MSun)**(1/3) * np.sqrt(constants.G*mBH)) * (aGW)**(3/2)
+    value = coeff * term_a * term_b * term_c * term_d * term_e / MSTAR * (1/1.3)
+    return value
+
 plt.rcParams["font.family"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "cm"
 
-cmap = matplotlib.colormaps['cool']
-colours = cmap(np.linspace(0, 1, 6))
-labels = [
-    r"$10^5\ {\rm M_{\odot}}$", 
-    r"$4 \times\ 10^5 {\rm M_{\odot}}$", 
-    r"$10^6\ {\rm M_{\odot}}$", 
-    r"$4 \times 10^6\ {\rm M_{\odot}}$", 
-    r"$10^7\ {\rm M_{\odot}}$",
-    r"$4\times 10^7\ {\rm M_{\odot}}$"
-]
-gamma = np.linspace(1, 2, 2000)
+gamma = np.linspace(0.51, 2., 1000)
+vkick = [100, 1000]
+MBH = [1e5, 1e6, 1e7] | units.MSun
 
-fig, ax = plt.subplots(figsize=(6,5))
-ax.yaxis.set_ticks_position('both')
-ax.xaxis.set_ticks_position('both')
-ax.xaxis.set_minor_locator(mtick.AutoMinorLocator())
-ax.yaxis.set_minor_locator(mtick.AutoMinorLocator())
-ax.fill_between(gamma, 1e6*(1e-5), 1e6*(1e-4), color="pink", alpha=0.5)
-ax.fill_between(gamma, 1e6*(1e-4), 1e6*(10**-3.5), color="dodgerblue", alpha=0.15)
+plter = SetupFig()
+fig, ax = plter.get_fig_ax(figsize=(6,5))
+for im, mass in enumerate(MBH):
+    for iv, v in enumerate(vkick):
+        data_array = [[ ], [ ]]
+        for ig, g in enumerate(gamma):
+            rate_us = event_rate(v | units.kms, mass, g)
+            rate_KM08 = KM08_event_rate(mass, v | units.kms, g)
+            data_array[0].append(rate_us.value_in(units.yr**-1))
+            data_array[1].append(rate_KM08.value_in(units.yr**-1))
+        ax.plot(
+            gamma, data_array[0], 
+            color=plter.colours[im], 
+            linestyle=plter.linestyles[iv], 
+            lw=3-iv
+            )
+        if iv == 1 and im == 1:
+            ax.plot(gamma, data_array[1], color=plter.colours[im], lw=1.5)
 
-gamma = np.linspace(0.5, 2., 10000)
-min_diff = abs(gamma - 1.75).argmin()
-for i,mass in enumerate([1e5, 4e5, 1e6, 4e6, 1e7, 4e7]):
-    mass = mass | units.MSun
-    vdisp = 200 * (mass/(1.66 * 10**8 | units.MSun))**(1/4.86) | units.kms
-    rate_300 = [ ]
-    for g in gamma:
-        rate = our_formula(mass, 300 | units.kms, gamma=g)
-        rate_300.append(rate)
-        if abs(g - 1.75) < 0.00008:
-            print(mass.value_in(units.MSun)/10**5, g, rate)
-        elif abs(g - 1.0) < 0.00008:
-            print(mass.value_in(units.MSun)/10**5, g, rate)
-        
-    rate_300 = np.array(rate_300)
-    
-    int_1e2 = abs(rate_300 - 1e2).argmin()
-    int_1e1 = abs(rate_300 - 1e1).argmin()
-    
-    print(f"Mass: {mass}")
-    print(f"Us at Gamma = 1.75, {rate_300[min_diff]*1e-6}")
-    print(f"Intersection 1e2: {gamma[int_1e2]}")
-    print(f"Intersection 1e1: {gamma[int_1e1]}")
-    
-    gamma_1e2 = gamma[int_1e2]
-    gamma_1e1 = gamma[int_1e1]
-    ax.plot(gamma, rate_300, color=colours[i], zorder=1, lw=2)
-    ax.scatter(None, None, color=colours[i], label=labels[i])
+    exponent = int(np.floor(np.log10(mass.value_in(units.MSun))))
+    mantissa = mass.value_in(units.MSun) / 10**exponent
 
-rate = [ ]
-for g in gamma:
-    rate.append(our_formula(1e7 | units.MSun, 1000 | units.kms, gamma=g, rinfl=10|units.pc))
-    
-ax.plot(gamma, rate, color=colours[i], zorder=1, lw=2, ls="--")
-    
-ax.set_xlim(1., 2.)
-ax.set_ylim(9, 1e5)
-ax.set_xlabel(r"$\gamma$", fontsize=14)#
-ax.set_ylabel(r"$\dot{N}$ [Myr$^{-1}$]", fontsize=14)
-ax.legend(fontsize=14, loc="lower left", ncol=2)
+    ax.scatter(
+        [], [], color=plter.colours[im],
+        label=rf"$10^{{{exponent}}}\,M_{{\odot}}$"
+        )
+ax.fill_between(gamma, (1e-5), (1e-4), color="pink", alpha=0.75)
+ax.fill_between(gamma, (1e-4), (10**-3.5), color="dodgerblue", alpha=0.5)
 ax.set_yscale("log")
-ax.tick_params(axis="y", which='both', 
-                direction="in", 
-                labelsize=14)
-ax.tick_params(axis="x", which='both', 
-                direction="in", 
-                labelsize=14)
-plt.savefig(f"plot/figures/wang_plot.pdf", dpi=300, bbox_inches='tight')
-plt.clf()
-
-def power_laws(gamma):
-    alpha = (3-gamma) - 1/(4-gamma) * (7/3 - 1 + gamma - 3 + gamma)
-    beta  = 2*gamma - 5 - 1/(4-gamma) * (6 - 2*gamma - 2*gamma)
-    return alpha, beta
-
-gamma = np.linspace(1.01, 1.99, 10000)
-alpha, beta = power_laws(gamma)
-fig, ax = plt.subplots(figsize=(6,5))
-ax.yaxis.set_ticks_position('both')
-ax.xaxis.set_ticks_position('both')
-ax.xaxis.set_minor_locator(mtick.AutoMinorLocator())
-ax.yaxis.set_minor_locator(mtick.AutoMinorLocator())
-ax.plot(gamma, alpha, label=r"$\alpha$", color="black", lw=2)
-ax.plot(gamma, beta, label=r"$\beta$", color="black", ls="-.", lw=2)
+ax.set_ylabel(r"$\Gamma$ [yr$^{-1}$]", fontsize=plter.TICK_SIZE)
+ax.set_xlabel(r"$\gamma$", fontsize=plter.TICK_SIZE)
 ax.set_xlim(gamma[0], gamma[-1])
-ax.set_xlabel(r"$\gamma$", fontsize=14)#
-ax.set_ylabel(r"Power-law index", fontsize=14)
-ax.legend(fontsize=14, loc="upper right", ncol=1)
-ax.tick_params(axis="y", which='both',
-                direction="in",
-                labelsize=14)
-ax.tick_params(axis="x", which='both',
-                direction="in",
-                labelsize=14)
-plt.savefig(f"plot/figures/power_laws.pdf", dpi=300, bbox_inches='tight')
+ax.set_ylim(2e-7, 0.09)
+ax.legend(fontsize=plter.TICK_SIZE)
+plt.savefig("plot/figures/event_rate_vs_gamma.pdf", bbox_inches='tight')
 plt.clf()
-STOP
-
-
-
-wang_2004(SMBH_mass=1e7 | units.MSun)
-wang_2004(SMBH_mass=1e5 | units.MSun)
-wang_2004(SMBH_mass=4e5 | units.MSun)
-our_formula(SMBH_mass=1e5 | units.MSun, vkick=300 | units.kms)
-
-# MSMBH =  1e5,    4e5,   1e5,   4e5
-# vKICK =  300,    300,   600,   600
-# vdisp =  180,    190,   300,   330    BASED ON PLOTS OF LONG-TERM
-# rclus = 0.02,  0.045,  0.01,  0.02    BASED ON PLOTS OF LONG-TERM
-
-#                    MSMBH,          vkick,            vdisp,          rcluster
-configs = {
-    "Model_A": [1e5 | units.MSun, 300 | units.kms, 180 | units.kms, 0.0157 | units.pc],
-    "Model_B": [4e5 | units.MSun, 300 | units.kms, 190 | units.kms, 0.0449 | units.pc],
-    "Model_C": [1e5 | units.MSun, 600 | units.kms, 300 | units.kms, 0.0074 | units.pc],
-    "Model_D": [4e5 | units.MSun, 600 | units.kms, 330 | units.kms, 0.0193 | units.pc]
-}    
-
-model_choice = "Model_B"    
-rcluster = constants.G * configs[model_choice][0] / configs[model_choice][2]**2
-ratio_r = rcluster/configs[model_choice][-1]  # Merritt / Us
-ratio_v = configs[model_choice][1] / configs[model_choice][2]   # Merritt / Us
-prop = ratio_r**2.5*ratio_v**-2
-print("Merritt-to-us-ratio: ", prop)
-
-stone_2017(SMBH_mass=configs[model_choice][0],
-           vdisp=configs[model_choice][2],
-           vkick=configs[model_choice][1],
-           rcluster=configs[model_choice][3])
-rizzuto_2023(SMBH_mass=configs[model_choice][0],
-           vdisp=configs[model_choice][2],
-           vkick=configs[model_choice][1],
-           rcluster=configs[model_choice][3])
-komossa_2008(SMBH_mass=configs[model_choice][0],
-             vdisp=configs[model_choice][2],
-             vkick=configs[model_choice][1],
-             rcluster=configs[model_choice][3])
-wang_2004(SMBH_mass=configs[model_choice][0])

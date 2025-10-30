@@ -1,9 +1,7 @@
 import numpy as np
 from scipy import integrate as integ
-from scipy.interpolate import interp1d
 
 from amuse.units import units, constants
-
 from plot.forecasting.forecast_parameters import H0, OMEGA_M, OMEGA_L
 
 def get_Ez(z):

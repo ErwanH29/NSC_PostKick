@@ -3,7 +3,7 @@ from scipy.interpolate import interp1d
 from amuse.lab import units
 
 
-### General Constants
+######### General Constants #########
 AVG_STAR_MASS  = 1 | units.MSun
 AVG_STAR_RAD   = 1 | units.RSun
 TDE_FACTOR     = 0.9
@@ -12,7 +12,8 @@ H0 = 67.4 | (units.kms/units.Mpc)
 OMEGA_M = 0.303
 OMEGA_L = 0.697
 
-### Press-Schechter function parameters -- Table A1: https://arxiv.org/pdf/1410.3485
+
+######### Press-Schechter function parameters -- Table A1: https://arxiv.org/pdf/1410.3485 #########
 z_bins   = np.array([0.05, 0.35, 0.75, 1.5, 2.5, 3.5, 4.0, 7.0])
 phi_star = 10**-3 * np.array([0.84, 0.84, 0.74, 0.45, 0.22, 0.12, 0.12, 0.12])
 M_norm   = 10**np.array([11.14, 11.11, 11.06, 10.91, 10.78, 10.60, 10.60, 10.60])
@@ -21,7 +22,8 @@ phi_star_interp = interp1d(z_bins, phi_star, kind='linear', fill_value='extrapol
 M_star_interp   = interp1d(z_bins, M_norm, kind='linear', fill_value='extrapolate')
 alpha_interp    = interp1d(z_bins, alpha_values, kind='linear', fill_value='extrapolate')
 
-### Binary BH merger rates -- Fig. 10: https://arxiv.org/pdf/2412.15334
+
+######### Binary BH merger rates -- Fig. 10: https://arxiv.org/pdf/2412.15334 #########
 # First element: IMBH-IMBH merger rate   [yr^-1 Gpc^-3]
 # Second element: SMBH-SMBH merger rate  [yr^-1 Gpc^-3]
 merger_rate = { 
@@ -46,7 +48,6 @@ merger_rate_IMBH = interp1d(
     kind='linear',
     fill_value='extrapolate'
 )
-
 merger_rate_SMBH = interp1d(
     z_vals,
     rate_values[:, 1],
@@ -54,7 +55,8 @@ merger_rate_SMBH = interp1d(
     fill_value='extrapolate'
 )
 
-### Probability Distributions -- Table VIII: https://arxiv.org/pdf/1201.1923
+
+######### Probability Distributions -- Table VIII: https://arxiv.org/pdf/1201.1923 #########
 Prob_Distr = {
     "Kick Lower Limit": [    0,      100,      200,      300,     400,       500,     1000,     1500,    2000],
     "Hot Kick PDF":  [0.342593, 0.211364, 0.116901, 0.078400, 0.057590, 0.140283, 0.040183, 0.010309],

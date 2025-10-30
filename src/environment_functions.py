@@ -10,12 +10,11 @@ def handle_coll(bodies, colliders, tcoll, dir_path, stellar_type):
     """
     Resolve merging event
     Args:
-        bodies (amuse.particles):  Simulated bodies
+        bodies (amuse.particles):     Simulated bodies
         colliders (amuse.particles):  The particles in the collision
-        tcoll (units.time):  The time which the particles collide at
-        dir_path (str):  Path to save orbital data
-    Returns:
-        new_particle (amuse.particle):  The new particle formed from the collision
+        tcoll (units.time):           The time which the particles collide at
+        dir_path (str):               Path to save orbital data
+    Returns: The new particle formed from the collision
     """
     p1 = bodies[bodies.key == colliders[0].key]
     p2 = bodies[bodies.key == colliders[1].key]
@@ -70,9 +69,9 @@ def handle_supernova(SN_detect, bodies, grav_code):
     """
     Handle SN explosions
     Args:
-        SN_detect (object): Detected particle set undergoing SN
+        SN_detect (object):        Detected particle set undergoing SN
         bodies (amuse.particles):  All bodies undergoing stellar evolution
-        grav_code (code):  Gravitational integrator
+        grav_code (code):          Gravitational integrator
     """
     SN_particle = SN_detect.particles(0)
     for ci in range(len(SN_particle)):
@@ -95,8 +94,7 @@ def ZAMS_radius(mass):
     Define stellar radius
     Args:
         mass (units.mass):  Stellar mass
-    Returns:
-        radius (units.length):  Stellar radius
+    Returns: Stellar radius
     """
     mass_sq = (mass.value_in(units.MSun))**2
     r_zams = pow(mass.value_in(units.MSun), 1.25) \
@@ -108,9 +106,8 @@ def stellar_tidal_radius(stars, SMBH_mass):
     Define stellar particle radius
     Args:
         stars (amuse.particles):  Stellar particles
-        SMBH_mass (units.mass):  Mass of the SMBH
-    Returns:
-        radius (units.length):  Stellar particle radius
+        SMBH_mass (units.mass):   Mass of the SMBH
+    Returns: Stellar particle radius
     """
     mass_sq = (stars.mass.value_in(units.MSun))**2.
     r_zams = pow(stars.mass.value_in(units.MSun), 1.25) \
@@ -124,8 +121,7 @@ def neutron_star_radius(mass):
     Based on Eqn (8): https://arxiv.org/pdf/1305.3510
     Args:
         mass (units.mass):  Mass of the neutron star
-    Returns:
-        radius (units.length):  Neutron star radius
+    Returns: Neutron star radius
     """
     return 2.824 * (constants.G * mass)/(constants.c**2)
 
@@ -135,8 +131,7 @@ def white_dwarf_radius(mass):
     Based on https://arxiv.org/abs/astro-ph/0401420
     Args:
         mass (units.mass):  Mass of the neutron star
-    Returns:
-        radius (units.length):  Neutron star radius
+    Returns: Neutron star radius
     """
     return 0.0127 * (MCH/mass)**(1./3.)*(1. - (mass/MCH)**(4./3.))**(1./2.) | units.RSun
 
@@ -155,22 +150,15 @@ def GW_event_kick(particles, spin_a=None, spin_b=None):
     Apply recoil kick (Lousto et al. 2012)
     Args:
         particles (amuse.particles):  Particle set containing the binary
-        spin_a (list):  Spin of the first particle [parallel, perpendicular]
-        spin_b (list):  Spin of the second particle [parallel, perpendicular]
-    Returns:
-        kick (units.velocity):  Kick velocity
+        spin_a (list):                Spin of the first particle [parallel, perpendicular]
+        spin_b (list):                Spin of the second particle [parallel, perpendicular]
+    Returns: Kick velocity
     """
     ### Constants:  González et al. 2007; Lousto & Zlochower 2008
     A = 1.2e4 | units.kms
     H = 6.9e3 | units.kms
     B = -0.93
     zeta = 2.53073  # Radian
-
-    ### Constants: Lousto et al. 2012
-    va1 = 3678 | units.kms
-    va = 2481 | units.kms
-    vb = 1793 | units.kms
-    vc = 1507 | units.kms
 
     ke = orbital_elements(particles, G=constants.G)
     ecc = ke[3] % 1.
@@ -193,11 +181,19 @@ def GW_event_kick(particles, spin_a=None, spin_b=None):
 
     vm = A * eta**2 * np.sqrt(1. - 4.*eta) * (1.+ B*eta)
     vperp = H * eta**2 / (1 + q) * (spin_b[0] - q*spin_a[0])
-    eff_spin = 2 * (spin_b[0] + q**2 * spin_a[0]) / (1+q)**2
 
-    #vpara_a = 16 * eta**2 / (1+q) * (va1 + va*eff_spin + vb*eff_spin**2 + vc*eff_spin**3)
-    #vpara_b = abs(spin_b[0] - q*spin_a[0])*np.cos(phi_delta - phi_a)
-    #vpara = np.cross(vpara_a, vpara_b)
+    if spin_a is not None and spin_b is not None:
+        eff_spin = 2 * (spin_b[0] + q**2 * spin_a[0]) / (1+q)**2
+        
+        ### Constants: Lousto et al. 2012
+        va1 = 3678 | units.kms
+        va = 2481 | units.kms
+        vb = 1793 | units.kms
+        vc = 1507 | units.kms
+
+        #vpara_a = 16 * eta**2 / (1+q) * (va1 + va*eff_spin + vb*eff_spin**2 + vc*eff_spin**3)
+        #vpara_b = abs(spin_b[0] - q*spin_a[0])*np.cos(phi_delta - phi_a)
+        #vpara = np.cross(vpara_a, vpara_b)
 
     vkick = (1. + ecc) * (vm * ecc_perp + vperp * (np.cos(zeta * ecc_perp) + np.sin(zeta * ecc_perp)) ) # + vpara*ecc_par)
     return vkick

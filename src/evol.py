@@ -19,14 +19,14 @@ class EvolveSystem(object):
         """
         Setting up the simulation code
         Args:
-            bodies (object):  The particle set needed to simulate
+            bodies (object):    The particle set needed to simulate
             tend (units.time):  The end time of the simulation
-            eta (float):  The step size
-            conv (converter):  Variable used to convert between nbody units and SI
-            no_worker (int):  Number of workers used
+            eta (float):        The step size
+            conv (converter):   Variable used to convert between nbody units and SI
+            no_worker (int):    Number of workers used
             dir_path (string):  Path for outputs
-            fname (string):  Template data file name
-            no_files (int):  Number of snapshots already existing for called run
+            fname (string):     Template data file name
+            no_files (int):     Number of snapshots already existing for called run
         """
         self.init_pset = bodies
         self.tend = tend
@@ -69,10 +69,10 @@ class EvolveSystem(object):
         self.grav_stopping.enable()
 
         self.chnl_from_grav = self.grav_code.particles.new_channel_to(
-                                self.particles,
-                                attributes=["mass","vx","vy","vz","x","y","z"], 
-                                target_names=["mass","vx","vy","vz","x","y","z"]
-                                )
+            self.particles,
+            attributes=["mass","vx","vy","vz","x","y","z"], 
+            target_names=["mass","vx","vy","vz","x","y","z"]
+            )
         self.chnl_from_locl = self.particles.new_channel_to(self.grav_code.particles)
 
         # Only evolve stars
@@ -86,24 +86,23 @@ class EvolveSystem(object):
         self.stellar_stopping.enable()
 
         self.star_grav_channel = self.stellar_code.particles.new_channel_to(
-                                    self.grav_code.particles, 
-                                    attributes=["mass"], 
-                                    target_names=["mass"]
-                                    )
+            self.grav_code.particles, 
+            attributes=["mass"], 
+            target_names=["mass"]
+            )
         self.star_local_channel = self.stellar_code.particles.new_channel_to(
-                                    self.particles, 
-                                    attributes=["stellar_type"], 
-                                    target_names=["stellar_type"]
-                                    )
+            self.particles, 
+            attributes=["stellar_type"], 
+            target_names=["stellar_type"]
+            )
 
     def process_merger(self, enc_particles_set, stellar_type_array):
         """
         Process the merger of two colliding particles
         Args:
             enc_particles_set (Particles):  Set of colliding particles
-            stellar_type_array (list):  Stellar type of colliding particles
-        Returns:
-            newp (Particles):  Remnant particle
+            stellar_type_array (list):      Stellar type of colliding particles
+        Returns: Remnant particle
         """
         filename = "merger_"+str(np.sum(self.particles.coll_events))+".amuse"
         merge_file = os.path.join(self.dpath, "merge_snapshots", self.fname, filename)
@@ -117,12 +116,12 @@ class EvolveSystem(object):
             )
 
         newp = handle_coll(
-                self.particles, 
-                enc_particles_set, 
-                tcoll, 
-                self.coll_path,
-                stellar_type_array
-                )
+            self.particles, 
+            enc_particles_set, 
+            tcoll, 
+            self.coll_path,
+            stellar_type_array
+            )
         
         return newp
 
@@ -282,8 +281,10 @@ class EvolveSystem(object):
                         self.grav_code
                     )
 
-            snap_file = os.path.join(self.dpath, "simulation_snapshot", self.fname, 
-                                     f"snapshot_step_{self.siter}.amuse")
+            snap_file = os.path.join(
+                self.dpath, "simulation_snapshot", self.fname, 
+                f"snapshot_step_{self.siter}.amuse"
+                )
             write_set_to_file(
                 self.particles, 
                 snap_file, 
