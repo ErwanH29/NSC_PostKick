@@ -74,7 +74,7 @@ def gamma_tau(age, M_bh, vkick, gamma, f_dep=0.5, RR=False):
         if Nlost > f_dep * Nclst:  # Cluster exhausted by observational time
             return 0 | units.yr**-1
         
-        return Gamma0_RR * np.exp(-(age - t_switch)/tau_RR)
+        return Gamma0_RR * np.exp(-(age)/tau_RR)
 
     ### Burst Phase ###
     # Coeff absorbs factor of mClump, zeta (rinfl = zeta a_GW), beta for a_i vs. a_clump, k for RHill, ecc_phi for interaction time

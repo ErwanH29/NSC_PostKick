@@ -193,13 +193,12 @@ galaxy_masses = [
      get_Mgal_from_Mbh(1e8 | units.MSun).value_in(units.MSun)] | units.MSun
 ]
 
-z_array = np.linspace(0.001, 4, 8)
+z_array = np.linspace(0.001, 3, 8)
 plt.rcParams["font.family"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "cm"
-colours = ["tab:red", "tab:blue"]
 labels = [
     r"$10^{5} < M_{\bullet} < 5\times10^{5}$ M$_\odot$",
-    r"$10^{6} < M_{\bullet} < 10^{9}$ M$_\odot$",
+    r"$10^{6} < M_{\bullet} < 10^{8}$ M$_\odot$",
 ]
 colours = ["tab:red", "tab:blue", "red", "blue"]
 
@@ -210,7 +209,7 @@ ALL_MBHS = [[ ], [ ]]
 ## Idx 1: Gamma = 1.75, Mgal = 10^6-10^9   MSun
 ## Idx 2: Gamma = 1.0,  Mgal = 10^5-5x10^5 MSun
 ## Idx 3: Gamma = 1.0,  Mgal = 10^6-10^9   MSun
-z_plot = np.linspace(1e-2, 4, 2000)
+z_plot = np.linspace(1e-2, 3, 2000)
 fig, ax = plt.subplots(figsize=(8, 6))
 ax = tickers(ax)
 for ig, gamma in enumerate([1.75, 1.0]):
@@ -228,8 +227,9 @@ for ig, gamma in enumerate([1.75, 1.0]):
             z_array, 
             gamma=gamma,
             zmax=7.0,
-            N_zform_samp=15000, 
-            N_HCSC_samp=25
+            N_zform_samp=30000, 
+            N_HCSC_samp=15,
+            RR=False
         )
 
         TDE_data = PchipInterpolator(z_array, TDEcum.value_in(units.yr**-1))
@@ -241,28 +241,59 @@ for ig, gamma in enumerate([1.75, 1.0]):
                 
         ax.plot(z_plot, TDE_data(z_plot), ls='-', color=colours[ig+im*2], lw=2+im)
         if ig == 0:
-            ax.plot(z_plot, GW_data(z_plot), ls='--', color=colours[ig+im*2], lw=2)
+            ax.plot(z_plot, GW_data(z_plot), ls=':', color=colours[ig+im*2], lw=2)
 
-# Stone & Loeb 2012 rates for comparison
-TDEcum, _ = cumulative_rate(
-    gal_mass, 
-    Rm_interp, 
-    z_array, 
-    gamma=1.0,
-    zmax=7.0,
-    N_zform_samp=10000, 
-    N_HCSC_samp=10,
-    RR=True
-)
-TDE_data = PchipInterpolator(z_array, TDEcum.value_in(units.yr**-1))
-ax.plot(z_plot, TDE_data(z_plot), ls='-', color="black", lw=2+im)
+if (0):
+    # Stone & Loeb 2012 rates for comparison
+    TDEcum, _ = cumulative_rate(
+        gal_mass, 
+        Rm_interp, 
+        z_array, 
+        gamma=1.0,
+        zmax=7.0,
+        N_zform_samp=10000, 
+        N_HCSC_samp=10,
+        RR=True
+    )
+    TDE_data = PchipInterpolator(z_array, TDEcum.value_in(units.yr**-1))
+    ax.plot(z_plot, TDE_data(z_plot), ls='-', color="black", lw=2+im)
 
 ax.scatter([], [], color=colours[0], label=labels[0])
 ax.scatter([], [], color=colours[2], label=labels[1])
 ax.set_yscale('log')
-ax.set_xlabel(r"$z$", fontsize=16)
-ax.set_ylabel(r"$\Gamma$ [yr$^{-1}$]", fontsize=16)
+ax.set_xlabel(r"$z_{\rm obs}$", fontsize=16)
+ax.set_ylabel(r"$\dot{N}_{i}$ [yr$^{-1}$]", fontsize=16)
 ax.set_xlim(6e-2, z_plot[-1])
 ax.set_ylim(1e-2, ax.get_ylim()[1])
 ax.legend(fontsize=12)
-plt.show()
+plt.savefig("plot/forecasting/MC_forecast.pdf", dpi=300)
+plt.clf()
+
+for i in range(2):
+    x_data = np.sort(ALL_VELS[i])
+    y_data = np.linspace(0, 1, len(y_data))
+    
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax = tickers(ax)
+    ax.plot(x_data, y_data, color='tab:blue', lw=2)
+    ax.set_xlabel(r"$v_{\rm kick}$ [km s$^{-1}$]", fontsize=16)
+    ax.set_ylabel(r"$f_<$", fontsize=16)
+    ax.set_xlim(0, max(x_data)*1.05)
+    ax.set_ylim(0, 1)
+    plt.savefig(f"plot/forecasting/MC_vkick_dist_{i}.png", dpi=300)
+    plt.clf()
+    
+
+for i in range(2):
+    x_data = np.sort(ALL_MBHS[i])
+    y_data = np.linspace(0, 1, len(y_data))
+    
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax = tickers(ax)
+    ax.plot(x_data, y_data, color='tab:blue', lw=2)
+    ax.set_xlabel(r"$M_{\bullet}$ [M$_\odot$]", fontsize=16)
+    ax.set_ylabel(r"$f_<$", fontsize=16)
+    ax.set_xlim(0, max(x_data)*1.05)
+    ax.set_ylim(0, 1)
+    plt.savefig(f"plot/forecasting/MC_vkick_dist_{i}.png", dpi=300)
+    plt.clf()
